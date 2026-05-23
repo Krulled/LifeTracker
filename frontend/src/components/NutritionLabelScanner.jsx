@@ -360,7 +360,7 @@ export default function NutritionLabelScanner({ date, onAdd, onClose }) {
                 {saving ? "Saving…" : `＋ Add to ${MEAL_LABELS[mealType]}`}
               </button>
               <button type="button" className="btn btn-ghost"
-                onClick={() => { setStep(null); if (!image) { setProductName(""); setServingSizeText(""); } }}>
+                onClick={() => { setStep(null); if (!image) { setProductName(""); setServingSizeText(""); setPerServing({ calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }); } }}>
                 {image ? "← Retake" : "← Back"}
               </button>
             </div>
