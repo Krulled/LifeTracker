@@ -1062,10 +1062,10 @@ def upsert_scanned_product():
 
     existing = ScannedProduct.query.filter_by(product_name=name).first()
     if existing:
-        existing.calories          = int(data.get("calories") or existing.calories)
-        existing.protein_g         = data.get("protein_g", existing.protein_g)
-        existing.carbs_g           = data.get("carbs_g",   existing.carbs_g)
-        existing.fat_g             = data.get("fat_g",     existing.fat_g)
+        existing.calories          = max(0, min(10000, int(data.get("calories") or existing.calories)))
+        existing.protein_g         = float(data.get("protein_g") or existing.protein_g or 0)
+        existing.carbs_g           = float(data.get("carbs_g")   or existing.carbs_g   or 0)
+        existing.fat_g             = float(data.get("fat_g")     or existing.fat_g     or 0)
         existing.serving_size_text = data.get("serving_size_text", existing.serving_size_text)
         existing.use_count        += 1
         existing.last_used         = datetime.utcnow()
@@ -1073,13 +1073,17 @@ def upsert_scanned_product():
         existing = ScannedProduct(
             product_name      = name,
             serving_size_text = data.get("serving_size_text"),
-            calories          = int(data.get("calories") or 0),
-            protein_g         = data.get("protein_g"),
-            carbs_g           = data.get("carbs_g"),
-            fat_g             = data.get("fat_g"),
+            calories          = max(0, min(10000, int(data.get("calories") or 0))),
+            protein_g         = float(data.get("protein_g") or 0),
+            carbs_g           = float(data.get("carbs_g")   or 0),
+            fat_g             = float(data.get("fat_g")     or 0),
         )
         db.session.add(existing)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 500
     return jsonify(existing.to_dict())
 
 
