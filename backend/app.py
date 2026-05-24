@@ -3247,6 +3247,8 @@ def scan_skin_product():
     data = request.get_json(force=True) or {}
     img  = data.get("image")
     mime = data.get("mime_type", "image/jpeg")
+    if mime not in ALLOWED_PHOTO_MIMES:
+        mime = "image/jpeg"
     if not img:
         return jsonify({"error": "image required"}), 400
 
