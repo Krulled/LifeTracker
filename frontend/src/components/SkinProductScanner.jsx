@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 
 const PRODUCT_TYPES = [
   { value: "medicated_wash",  label: "Medicated Wash" },
@@ -49,10 +49,15 @@ export default function SkinProductScanner({ onSaved, onClose }) {
   const [faceSafe,          setFaceSafe]          = useState(true);
   const [aiSummary,         setAiSummary]         = useState("");
   const [confidence,        setConfidence]        = useState(null);
-  const [scanning,          setScanning]          = useState(false);
   const [saving,            setSaving]            = useState(false);
   const [error,             setError]             = useState(null);
   const fileRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (image?.objectUrl) URL.revokeObjectURL(image.objectUrl);
+    };
+  }, [image]);
 
   async function handleFile(file) {
     if (!file) return;
@@ -64,7 +69,6 @@ export default function SkinProductScanner({ onSaved, onClose }) {
   }
 
   async function analyze(compressed) {
-    setScanning(true);
     setStep("scanning");
     setError(null);
     try {
@@ -87,7 +91,6 @@ export default function SkinProductScanner({ onSaved, onClose }) {
       setError(err.message);
       setStep("review");
     } finally {
-      setScanning(false);
     }
   }
 
@@ -122,6 +125,7 @@ export default function SkinProductScanner({ onSaved, onClose }) {
   }
 
   function resetToUpload() {
+    if (image?.objectUrl) URL.revokeObjectURL(image.objectUrl);
     setStep("upload"); setImage(null);
     setProductName(""); setBrand(""); setProductType("other");
     setActiveIngredients(""); setFaceSafe(true); setAiSummary("");
