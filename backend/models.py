@@ -819,7 +819,7 @@ class SkinProduct(db.Model):
     face_safe          = db.Column(db.Boolean,     nullable=False,  default=True)
     ai_summary         = db.Column(db.Text,        nullable=True)
     photo_data         = db.Column(db.LargeBinary, nullable=True)
-    photo_mime         = db.Column(db.String(20),  nullable=False,  default="image/jpeg")
+    photo_mime         = db.Column(db.String(20),  nullable=True,   default="image/jpeg")
     created_at         = db.Column(db.DateTime,    default=datetime.utcnow, nullable=False)
 
     def to_dict(self):
@@ -848,9 +848,10 @@ class DailyRoutine(db.Model):
     generated_at    = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     def to_dict(self):
+        import json as _json
         return {
             "routine_date":    self.routine_date.isoformat(),
-            "routine":         json.loads(self.routine_json),
+            "routine":         _json.loads(self.routine_json),
             "explanation":     self.explanation,
             "workout_context": self.workout_context,
             "generated_at":    self.generated_at.isoformat(),
