@@ -804,3 +804,77 @@ class ScannedProduct(db.Model):
             "fat_g":            self.fat_g,
             "use_count":        self.use_count,
         }
+
+
+class SkinProduct(db.Model):
+    """User's skincare product inventory — scanned once via Claude vision, never re-scanned."""
+    __tablename__ = "skin_products"
+
+    id                 = db.Column(db.Integer,     primary_key=True, autoincrement=True)
+    product_name       = db.Column(db.String(200), nullable=False)
+    brand              = db.Column(db.String(100), nullable=True)
+    product_type       = db.Column(db.String(50),  nullable=False, default="other")
+    # product_type values: medicated_wash | gentle_wash | moisturizer | sunscreen | heavy_occlusive | treatment | other
+    active_ingredients = db.Column(db.Text,        nullable=True)   # comma-separated string
+    face_safe          = db.Column(db.Boolean,     nullable=False,  default=True)
+    ai_summary         = db.Column(db.Text,        nullable=True)
+    photo_data         = db.Column(db.LargeBinary, nullable=True)
+    photo_mime         = db.Column(db.String(20),  nullable=False,  default="image/jpeg")
+    created_at         = db.Column(db.DateTime,    default=datetime.utcnow, nullable=False)
+
+    def to_dict(self):
+        return {
+            "id":                 self.id,
+            "product_name":       self.product_name,
+            "brand":              self.brand,
+            "product_type":       self.product_type,
+            "active_ingredients": self.active_ingredients,
+            "face_safe":          self.face_safe,
+            "ai_summary":         self.ai_summary,
+            "has_photo":          self.photo_data is not None,
+            "created_at":         self.created_at.isoformat(),
+        }
+
+
+class DailyRoutine(db.Model):
+    """Generated skincare routine for a date — persisted for idempotent rendering (Layer 3)."""
+    __tablename__ = "daily_routines"
+
+    id              = db.Column(db.Integer,  primary_key=True, autoincrement=True)
+    routine_date    = db.Column(db.Date,     nullable=False, unique=True, index=True)
+    routine_json    = db.Column(db.Text,     nullable=False)   # JSON string
+    explanation     = db.Column(db.Text,     nullable=True)    # Claude's 2-sentence explanation
+    workout_context = db.Column(db.Text,     nullable=True)    # snapshot of exercise data used
+    generated_at    = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    def to_dict(self):
+        return {
+            "routine_date":    self.routine_date.isoformat(),
+            "routine":         json.loads(self.routine_json),
+            "explanation":     self.explanation,
+            "workout_context": self.workout_context,
+            "generated_at":    self.generated_at.isoformat(),
+        }
+
+
+class RoutineStepLog(db.Model):
+    """Per-step completion state for daily AI routines — keyed by date + step_key."""
+    __tablename__ = "routine_step_logs"
+
+    id           = db.Column(db.Integer,    primary_key=True, autoincrement=True)
+    log_date     = db.Column(db.Date,       nullable=False, index=True)
+    step_key     = db.Column(db.String(50), nullable=False)   # e.g. "morning_0", "post_workout_1"
+    completed    = db.Column(db.Boolean,    nullable=False, default=False)
+    completed_at = db.Column(db.DateTime,   nullable=True)
+
+    __table_args__ = (
+        db.UniqueConstraint("log_date", "step_key", name="uq_routine_step_log"),
+    )
+
+    def to_dict(self):
+        return {
+            "log_date":     self.log_date.isoformat(),
+            "step_key":     self.step_key,
+            "completed":    self.completed,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+        }

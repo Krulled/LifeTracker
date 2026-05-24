@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 # Load .env before anything else (sets GROQ_API_KEY etc.)
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
-from models import db, SleepEntry, AICache, FoodEntry, Task, Habit, HabitLog, MoodEntry, ExerciseEntry, HydrationLog, MealTemplate, MealTemplateItem, ExerciseTemplate, ExerciseTemplateItem, WeightEntry, WeeklyReview, Chore, ChoreLog, BodyMeasurement, WeeklyPlan, Supplement, SupplementLog, ScreenTimeEntry, UserProfile, SkincareLog, SkinCareStep, SkinCareStepLog, SkinConditionLog, SkinPhotoAnalysis, ScannedProduct
+from models import db, SleepEntry, AICache, FoodEntry, Task, Habit, HabitLog, MoodEntry, ExerciseEntry, HydrationLog, MealTemplate, MealTemplateItem, ExerciseTemplate, ExerciseTemplateItem, WeightEntry, WeeklyReview, Chore, ChoreLog, BodyMeasurement, WeeklyPlan, Supplement, SupplementLog, ScreenTimeEntry, UserProfile, SkincareLog, SkinCareStep, SkinCareStepLog, SkinConditionLog, SkinPhotoAnalysis, ScannedProduct, SkinProduct, DailyRoutine, RoutineStepLog
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": ["http://localhost:9999", "http://127.0.0.1:9999", "http://localhost:3030", "http://127.0.0.1:3030"]}},
