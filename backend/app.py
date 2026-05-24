@@ -3235,6 +3235,7 @@ SKIN_PRODUCT_TYPES = (
     "medicated_wash", "gentle_wash", "moisturizer",
     "sunscreen", "heavy_occlusive", "treatment", "other",
 )
+ALLOWED_PHOTO_MIMES = {"image/jpeg", "image/png", "image/webp"}
 
 
 @app.route("/api/skincare/products/scan", methods=["POST"])
@@ -3266,6 +3267,7 @@ def scan_skin_product():
         "or the label explicitly states it is not for face use.\n"
         "If the label is unclear, set confidence to 'low' and give your best estimate for all fields."
     )
+    raw = ""
     try:
         resp = client.messages.create(
             model="claude-sonnet-4-6",
@@ -3308,13 +3310,15 @@ def create_skin_product():
 
     photo_data = None
     photo_b64  = data.get("photo_b64")
-    photo_mime = data.get("photo_mime", "image/jpeg")
+    photo_mime = str(data.get("photo_mime", "image/jpeg"))[:20]
+    if photo_mime not in ALLOWED_PHOTO_MIMES:
+        photo_mime = "image/jpeg"
     if photo_b64:
         import base64
         try:
             photo_data = base64.b64decode(photo_b64)
         except Exception:
-            pass
+            return jsonify({"error": "Invalid photo_b64 encoding"}), 400
 
     product = SkinProduct(
         product_name       = name,
