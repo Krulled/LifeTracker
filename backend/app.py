@@ -3229,6 +3229,159 @@ def skincare_photo_apply(analysis_id):
     return jsonify(log.to_dict())
 
 
+# ── Skin Product Inventory ─────────────────────────────────────────────────
+
+SKIN_PRODUCT_TYPES = (
+    "medicated_wash", "gentle_wash", "moisturizer",
+    "sunscreen", "heavy_occlusive", "treatment", "other",
+)
+
+
+@app.route("/api/skincare/products/scan", methods=["POST"])
+def scan_skin_product():
+    """Layer 1: Claude vision — runs once per product at upload time, never again."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return jsonify({"error": "AI not available"}), 503
+    data = request.get_json(force=True) or {}
+    img  = data.get("image")
+    mime = data.get("mime_type", "image/jpeg")
+    if not img:
+        return jsonify({"error": "image required"}), 400
+
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+    prompt = (
+        "You are analyzing a skincare product label photo. "
+        "Extract product information and return ONLY a valid JSON object — no markdown, no fences.\n\n"
+        "Schema:\n"
+        '{"product_name": "full product name as printed on label",\n'
+        ' "brand": "brand name or null if not visible",\n'
+        ' "product_type": "one of: medicated_wash | gentle_wash | moisturizer | sunscreen | heavy_occlusive | treatment | other",\n'
+        ' "active_ingredients": "comma-separated list of active ingredients with % concentrations if visible, or null",\n'
+        ' "face_safe": true,\n'
+        ' "ai_summary": "1-2 sentence description of what this product does and its primary benefit",\n'
+        ' "confidence": "high | medium | low"}\n\n'
+        "Set face_safe to false if: the product is a heavy body cream, contains high petrolatum/mineral oil intended for body/hand use, "
+        "or the label explicitly states it is not for face use.\n"
+        "If the label is unclear, set confidence to 'low' and give your best estimate for all fields."
+    )
+    try:
+        resp = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=512,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {"type": "base64", "media_type": mime, "data": img}},
+                    {"type": "text", "text": prompt},
+                ],
+            }],
+        )
+        raw    = resp.content[0].text.strip()
+        result = json.loads(_strip_json_fences(raw))
+        ptype  = result.get("product_type", "other")
+        result["product_type"] = ptype if ptype in SKIN_PRODUCT_TYPES else "other"
+        result["face_safe"]    = bool(result.get("face_safe", True))
+        return jsonify(result)
+    except json.JSONDecodeError:
+        return jsonify({"error": "AI returned invalid JSON", "raw": raw[:300]}), 500
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/skincare/products", methods=["GET"])
+def list_skin_products():
+    products = SkinProduct.query.order_by(SkinProduct.created_at.desc()).all()
+    return jsonify([p.to_dict() for p in products])
+
+
+@app.route("/api/skincare/products", methods=["POST"])
+def create_skin_product():
+    data  = request.get_json(force=True) or {}
+    name  = str(data.get("product_name") or "").strip()[:200]
+    if not name:
+        return jsonify({"error": "product_name required"}), 400
+    ptype = data.get("product_type", "other")
+    if ptype not in SKIN_PRODUCT_TYPES:
+        ptype = "other"
+
+    photo_data = None
+    photo_b64  = data.get("photo_b64")
+    photo_mime = data.get("photo_mime", "image/jpeg")
+    if photo_b64:
+        import base64
+        try:
+            photo_data = base64.b64decode(photo_b64)
+        except Exception:
+            pass
+
+    product = SkinProduct(
+        product_name       = name,
+        brand              = str(data.get("brand") or "")[:100] or None,
+        product_type       = ptype,
+        active_ingredients = str(data.get("active_ingredients") or "")[:500] or None,
+        face_safe          = bool(data.get("face_safe", True)),
+        ai_summary         = str(data.get("ai_summary") or "")[:1000] or None,
+        photo_data         = photo_data,
+        photo_mime         = photo_mime,
+    )
+    db.session.add(product)
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 500
+    return jsonify(product.to_dict()), 201
+
+
+@app.route("/api/skincare/products/<int:product_id>", methods=["PATCH"])
+def update_skin_product(product_id):
+    product = SkinProduct.query.get_or_404(product_id)
+    data    = request.get_json(force=True) or {}
+    if "product_name" in data:
+        v = str(data["product_name"]).strip()[:200]
+        if v:
+            product.product_name = v
+    if "brand" in data:
+        product.brand = str(data["brand"])[:100] or None
+    if "product_type" in data:
+        ptype = data["product_type"]
+        product.product_type = ptype if ptype in SKIN_PRODUCT_TYPES else "other"
+    if "active_ingredients" in data:
+        product.active_ingredients = str(data["active_ingredients"])[:500] or None
+    if "face_safe" in data:
+        product.face_safe = bool(data["face_safe"])
+    if "ai_summary" in data:
+        product.ai_summary = str(data["ai_summary"])[:1000] or None
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 500
+    return jsonify(product.to_dict())
+
+
+@app.route("/api/skincare/products/<int:product_id>", methods=["DELETE"])
+def delete_skin_product(product_id):
+    product = SkinProduct.query.get_or_404(product_id)
+    db.session.delete(product)
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 500
+    return jsonify({"ok": True})
+
+
+@app.route("/api/skincare/products/<int:product_id>/photo", methods=["GET"])
+def get_skin_product_photo(product_id):
+    product = SkinProduct.query.get_or_404(product_id)
+    if not product.photo_data:
+        return jsonify({"error": "No photo"}), 404
+    return Response(product.photo_data, mimetype=product.photo_mime)
+
+
 # ---------------------------------------------------------------------------
 # Hub today-status — single round-trip for all tile badges
 # ---------------------------------------------------------------------------
