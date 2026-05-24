@@ -3491,9 +3491,15 @@ def _build_routine(products, exercises):
         pw = []
         if cardio_today:
             c = _pick_cleanser("bp")
-            reason = ("Post-cardio rule: BP wash eliminates sweat-activated surface bacteria"
-                      if c and c.product_type == "medicated_wash"
-                      else "Medicated wash limit reached — gentle cleanse protects barrier")
+            is_bp = (c is not None and c.product_type == "medicated_wash"
+                     and c.active_ingredients is not None
+                     and "benzoyl" in c.active_ingredients.lower())
+            if is_bp:
+                reason = "Post-cardio rule: BP wash eliminates sweat-activated surface bacteria"
+            elif c and c.product_type == "medicated_wash":
+                reason = "Post-cardio rule: medicated cleanser after high-sweat activity"
+            else:
+                reason = "Medicated wash limit reached — gentle cleanse protects barrier"
             if c:
                 pw.append(_step("post_workout", 0, "Cleanse", c, reason))
         elif strength_today:
@@ -3602,7 +3608,11 @@ def _generate_and_persist_routine(target_date):
             workout_context = workout_ctx,
         )
         db.session.add(existing)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
     return existing
 
 
