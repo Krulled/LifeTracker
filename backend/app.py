@@ -3386,6 +3386,315 @@ def get_skin_product_photo(product_id):
     return Response(product.photo_data, mimetype=product.photo_mime)
 
 
+# ── Skincare Routine Rule Engine (Layer 2 — deterministic, no LLM) ─────────
+
+_CARDIO_TYPES   = {"cardio", "sports"}
+_STRENGTH_TYPES = {"strength"}
+_MAX_MEDICATED  = 2   # max medicated washes per 24-hour cycle
+
+
+def _build_routine(products, exercises):
+    """
+    Pure deterministic routine builder. No I/O, no LLM, no side effects.
+
+    products:  list of SkinProduct ORM objects (ALL products — include face-unsafe for alerts)
+    exercises: list of ExerciseEntry ORM objects for the target date
+
+    Returns dict with keys:
+      sections: list of section dicts
+      alerts:   list of alert strings
+
+    Each section: {key, label, icon, steps, workout_context?}
+    Each step:    {step_key, action, product_id, product_name, brand, product_type, reason}
+    step_key format: "{section_key}_{zero_based_index}"  e.g. "morning_0", "post_workout_1"
+    """
+    face_safe = [p for p in products if p.face_safe]
+
+    def first(ptype):
+        return next((p for p in face_safe if p.product_type == ptype), None)
+
+    def all_of(ptype):
+        return [p for p in face_safe if p.product_type == ptype]
+
+    medicated_list = all_of("medicated_wash")
+    gentle         = first("gentle_wash")
+    moisturizer    = first("moisturizer")
+    sunscreen      = first("sunscreen")
+
+    cardio_today   = [e for e in exercises if e.exercise_type in _CARDIO_TYPES]
+    strength_today = [e for e in exercises if e.exercise_type in _STRENGTH_TYPES]
+    has_workout    = bool(exercises)
+
+    med_used = [0]   # mutable via closure — tracks how many medicated washes assigned
+
+    def _pick_cleanser(prefer=None):
+        """Pick cleanser respecting medicated budget. prefer='bp'|'bha'|None."""
+        if prefer == "bp" and med_used[0] < _MAX_MEDICATED:
+            bp = next(
+                (p for p in medicated_list
+                 if p.active_ingredients and "benzoyl" in p.active_ingredients.lower()),
+                medicated_list[0] if medicated_list else None,
+            )
+            if bp:
+                med_used[0] += 1
+                return bp
+        if prefer == "bha" and med_used[0] < _MAX_MEDICATED:
+            bha = next(
+                (p for p in medicated_list
+                 if p.active_ingredients and "salicylic" in p.active_ingredients.lower()),
+                medicated_list[0] if medicated_list else None,
+            )
+            if bha:
+                med_used[0] += 1
+                return bha
+        if medicated_list and med_used[0] < _MAX_MEDICATED:
+            idx = min(med_used[0], len(medicated_list) - 1)
+            med_used[0] += 1
+            return medicated_list[idx]
+        return gentle   # fallback (may be None)
+
+    def _step(section_key, idx, action, product, reason):
+        return {
+            "step_key":     f"{section_key}_{idx}",
+            "action":       action,
+            "product_id":   product.id           if product else None,
+            "product_name": product.product_name if product else None,
+            "brand":        product.brand        if product else None,
+            "product_type": product.product_type if product else None,
+            "reason":       reason,
+        }
+
+    sections = []
+    alerts   = []
+
+    # ── Morning ────────────────────────────────────────────────────────────
+    m = []
+    if cardio_today:
+        c = gentle
+        reason = ("Light pre-workout cleanse — medicated wash reserved for post-cardio"
+                  if c else "Water rinse only — medicated wash reserved for post-cardio")
+        if c:
+            m.append(_step("morning", 0, "Cleanse", c, reason))
+    else:
+        c = _pick_cleanser()
+        if c:
+            m.append(_step("morning", 0, "Cleanse", c, "Morning deep-pore cleanse"))
+    if moisturizer:
+        m.append(_step("morning", len(m), "Moisturize", moisturizer, "Barrier protection"))
+    if sunscreen:
+        m.append(_step("morning", len(m), "SPF", sunscreen, "Mandatory: UV exposure darkens PIH"))
+        alerts.append("SPF is mandatory today — UV locks in hyperpigmentation")
+    sections.append({"key": "morning", "label": "Morning", "icon": "🌅", "steps": m})
+
+    # ── Post-Workout (only if workout logged today) ─────────────────────────
+    if has_workout:
+        pw = []
+        if cardio_today:
+            c = _pick_cleanser("bp")
+            reason = ("Post-cardio rule: BP wash eliminates sweat-activated surface bacteria"
+                      if c and c.product_type == "medicated_wash"
+                      else "Medicated wash limit reached — gentle cleanse protects barrier")
+            if c:
+                pw.append(_step("post_workout", 0, "Cleanse", c, reason))
+        elif strength_today:
+            c = _pick_cleanser("bha")
+            reason = ("Post-strength rule: BHA dissolves deep pore sebum"
+                      if c and c.product_type == "medicated_wash"
+                      else "Medicated wash limit reached — gentle cleanse protects barrier")
+            if c:
+                pw.append(_step("post_workout", 0, "Cleanse", c, reason))
+        else:
+            if gentle:
+                pw.append(_step("post_workout", 0, "Cleanse", gentle, "Post-workout rinse"))
+        if moisturizer:
+            pw.append(_step("post_workout", len(pw), "Moisturize", moisturizer, "Rehydrate after cleansing"))
+
+        if cardio_today:
+            t   = cardio_today[0].created_at
+            ctx = f"cardio · logged {t.strftime('%I:%M %p')}"
+        elif strength_today:
+            ctx = "strength workout"
+        else:
+            ctx = "workout"
+        sections.append({"key": "post_workout", "label": "Post-Workout",
+                          "icon": "💪", "steps": pw, "workout_context": ctx})
+
+    # ── Evening ────────────────────────────────────────────────────────────
+    ev = []
+    c  = _pick_cleanser()
+    if c and c.product_type == "medicated_wash":
+        ev.append(_step("evening", 0, "Cleanse", c, "End-of-day pore clearing"))
+    elif gentle:
+        reason = ("Medicated wash limit reached — gentle end-of-day cleanse"
+                  if med_used[0] >= _MAX_MEDICATED else "End-of-day cleanse")
+        ev.append(_step("evening", 0, "Cleanse", gentle, reason))
+    if moisturizer:
+        ev.append(_step("evening", len(ev), "Moisturize", moisturizer, "Overnight barrier repair"))
+    sections.append({"key": "evening", "label": "Evening", "icon": "🌙", "steps": ev})
+
+    # ── Global alerts ──────────────────────────────────────────────────────
+    if med_used[0] >= _MAX_MEDICATED:
+        alerts.append("2 medicated washes assigned today — limit reached. Any extra shower: use gentle cleanser only.")
+    for p in products:
+        if not p.face_safe:
+            alerts.append(f"{p.product_name} excluded from face routine — not face-safe.")
+
+    return {"sections": sections, "alerts": alerts}
+
+
+# ── Routine Endpoint Helpers ───────────────────────────────────────────────
+
+def _generate_and_persist_routine(target_date):
+    """
+    Layer 2 helper: run rule engine, call Claude for 2-sentence explanation,
+    upsert DailyRoutine. Returns DailyRoutine ORM object.
+    """
+    products       = SkinProduct.query.all()
+    exercises      = ExerciseEntry.query.filter_by(entry_date=target_date).all()
+    routine_data   = _build_routine(products, exercises)
+    workout_ctx    = (
+        ", ".join(f"{e.exercise_type} ({e.created_at.strftime('%I:%M %p')})" for e in exercises)
+        or "rest day"
+    )
+
+    explanation = None
+    api_key     = os.environ.get("ANTHROPIC_API_KEY")
+    if api_key and products:
+        try:
+            import anthropic
+            client = anthropic.Anthropic(api_key=api_key)
+            sections_summary = "; ".join(
+                f"{s['label']}: " + ", ".join(
+                    f"{st['action']} with {st['product_name'] or 'none'}"
+                    for st in s["steps"]
+                )
+                for s in routine_data["sections"]
+            )
+            resp = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=200,
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        f"Today's workout: {workout_ctx}.\n"
+                        f"Generated routine: {sections_summary}.\n"
+                        f"User goal: treat active breakouts and fade PIH.\n\n"
+                        "Write exactly 2 sentences explaining WHY this routine was assembled this way today. "
+                        "Be specific about which rules were triggered. Plain text only."
+                    ),
+                }],
+            )
+            explanation = resp.content[0].text.strip()
+        except Exception:
+            pass   # explanation is optional
+
+    existing = DailyRoutine.query.filter_by(routine_date=target_date).first()
+    if existing:
+        existing.routine_json    = json.dumps(routine_data)
+        existing.explanation     = explanation
+        existing.workout_context = workout_ctx
+        existing.generated_at    = datetime.utcnow()
+    else:
+        existing = DailyRoutine(
+            routine_date    = target_date,
+            routine_json    = json.dumps(routine_data),
+            explanation     = explanation,
+            workout_context = workout_ctx,
+        )
+        db.session.add(existing)
+    db.session.commit()
+    return existing
+
+
+# ── Routine Routes ─────────────────────────────────────────────────────────
+
+@app.route("/api/skincare/routine", methods=["GET"])
+def get_skincare_routine():
+    """
+    Layer 3: return persisted routine for date.
+    Generates one if none exists yet (first load).
+    Merges step completion state from RoutineStepLog.
+    """
+    date_str = request.args.get("date") or date.today().isoformat()
+    try:
+        target_date = date.fromisoformat(date_str)
+    except ValueError:
+        return jsonify({"error": "invalid date"}), 400
+
+    routine_obj = DailyRoutine.query.filter_by(routine_date=target_date).first()
+    if not routine_obj:
+        if not SkinProduct.query.first():
+            return jsonify({"routine": None, "message": "No products in inventory yet"}), 200
+        routine_obj = _generate_and_persist_routine(target_date)
+
+    routine_data = json.loads(routine_obj.routine_json)
+
+    # Merge completion state (idempotent restore)
+    step_logs = {
+        log.step_key: log.completed
+        for log in RoutineStepLog.query.filter_by(log_date=target_date).all()
+    }
+    for section in routine_data.get("sections", []):
+        for step in section.get("steps", []):
+            step["completed"] = step_logs.get(step["step_key"], False)
+
+    return jsonify({
+        "routine_date":    routine_obj.routine_date.isoformat(),
+        "routine":         routine_data,
+        "explanation":     routine_obj.explanation,
+        "workout_context": routine_obj.workout_context,
+        "generated_at":    routine_obj.generated_at.isoformat(),
+    })
+
+
+@app.route("/api/skincare/routine/generate", methods=["POST"])
+def regenerate_skincare_routine():
+    """Force-regenerate routine for a date (replaces persisted version)."""
+    data     = request.get_json(force=True) or {}
+    date_str = data.get("date") or date.today().isoformat()
+    try:
+        target_date = date.fromisoformat(date_str)
+    except ValueError:
+        return jsonify({"error": "invalid date"}), 400
+    if not SkinProduct.query.first():
+        return jsonify({"error": "No products in inventory"}), 400
+    obj = _generate_and_persist_routine(target_date)
+    return jsonify({"ok": True, "generated_at": obj.generated_at.isoformat()})
+
+
+@app.route("/api/skincare/routine/step-toggle", methods=["POST"])
+def toggle_routine_step():
+    """Toggle a step's completion. Idempotent — safe to call multiple times."""
+    data     = request.get_json(force=True) or {}
+    date_str = data.get("date") or date.today().isoformat()
+    step_key = str(data.get("step_key") or "").strip()[:50]
+    if not step_key:
+        return jsonify({"error": "step_key required"}), 400
+    try:
+        target_date = date.fromisoformat(date_str)
+    except ValueError:
+        return jsonify({"error": "invalid date"}), 400
+
+    log = RoutineStepLog.query.filter_by(log_date=target_date, step_key=step_key).first()
+    if log:
+        log.completed    = not log.completed
+        log.completed_at = datetime.utcnow() if log.completed else None
+    else:
+        log = RoutineStepLog(
+            log_date     = target_date,
+            step_key     = step_key,
+            completed    = True,
+            completed_at = datetime.utcnow(),
+        )
+        db.session.add(log)
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 500
+    return jsonify({"step_key": step_key, "completed": log.completed})
+
+
 # ---------------------------------------------------------------------------
 # Hub today-status — single round-trip for all tile badges
 # ---------------------------------------------------------------------------
