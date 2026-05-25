@@ -9085,3 +9085,101 @@ button, a, [role="button"], input[type="range"] {
   transition: background 0.15s;
 }
 .sc-product-del:hover { background: rgba(248,81,73,0.8); color: white; }
+
+/* ── Workout Chat Panel (SkinCare Today tab) ─────────────────────────────── */
+.wc-section {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border, #e5e7eb);
+}
+.wc-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+.wc-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+.wc-textarea {
+  flex: 1;
+  min-height: 2.5rem;
+  max-height: 5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border, #d1d5db);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  resize: none;
+  background: var(--surface, #fff);
+  color: var(--text, #111);
+  transition: border-color 0.15s;
+}
+.wc-textarea:focus {
+  outline: none;
+  border-color: #6366f1;
+}
+.wc-send-btn {
+  padding: 0.5rem 0.875rem;
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.wc-send-btn:hover { background: #4f46e5; }
+.wc-send-btn:disabled { background: #a5b4fc; cursor: not-allowed; }
+.wc-confirm {
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  background: #d1fae5;
+  color: #065f46;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+.wc-error {
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  background: #fee2e2;
+  color: #991b1b;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+.wc-fallback {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.wc-fallback-label {
+  font-size: 0.8rem;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 5px;
+  padding: 0.3rem 0.6rem;
+}
+.wc-fallback-btns {
+  display: flex;
+  gap: 0.5rem;
+}
+.wc-fallback-btn {
+  flex: 1;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.wc-fallback-btn:hover { background: #f3f4f6; }
