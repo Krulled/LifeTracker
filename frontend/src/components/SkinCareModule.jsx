@@ -594,6 +594,13 @@ export default function SkinCareModule({ onBack }) {
   const [productsLoading,   setProductsLoading]   = useState(false);
   const [showScanner,       setShowScanner]       = useState(false);
 
+  // Workout chat panel state
+  const [wInput,    setWInput]    = useState("");
+  const [wSending,  setWSending]  = useState(false);
+  const [wStatus,   setWStatus]   = useState(null);  // null | {reply, exerciseName, sweatLevel}
+  const [wError,    setWError]    = useState(null);
+  const [wFallback, setWFallback] = useState(false); // true = show low/medium/high buttons
+
   const fetchCondition = useCallback(async (d) => {
     const r    = await fetch(`/api/skincare/condition?date=${d}`);
     const data = await r.json();
@@ -656,6 +663,37 @@ export default function SkinCareModule({ onBack }) {
   }, [tab, selectedDate, fetchRoutine, fetchProducts]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────
+
+  async function submitWorkout(payload) {
+    setWSending(true);
+    setWError(null);
+    try {
+      const res  = await fetch("/api/skincare/workout-chat", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ ...payload, date: selectedDate }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setWError(json.error || "Something went wrong");
+        return;
+      }
+      if (json.fallback) {
+        setWFallback(true);
+        setWError(json.error || "Couldn't parse workout — choose intensity below");
+        return;
+      }
+      setWInput("");
+      setWFallback(false);
+      setWStatus({ reply: json.reply, exerciseName: json.created_exercise?.name,
+                   sweatLevel: json.created_exercise?.sweat_level });
+      fetchRoutine(selectedDate);
+    } catch {
+      setWError("Network error — try again");
+    } finally {
+      setWSending(false);
+    }
+  }
 
   async function toggleRoutineStep(stepKey) {
     const res = await fetch("/api/skincare/routine/step-toggle", {
@@ -780,6 +818,7 @@ export default function SkinCareModule({ onBack }) {
 
                 {/* TODAY'S ROUTINE */}
                 {tab === "routine" && (
+                  <>
                   <div className="sc-routine-panel">
                     {routineLoading && <div className="sc-loading">Generating routine…</div>}
                     {routineError   && <div className="sc-error-msg">{routineError}</div>}
@@ -850,6 +889,54 @@ export default function SkinCareModule({ onBack }) {
                       </>
                     )}
                   </div>
+                  {/* ── Workout Chat Panel ── */}
+                  <div className="wc-section">
+                    <div className="wc-label">🏃 Log a workout</div>
+                    <div className="wc-input-row">
+                      <textarea
+                        className="wc-textarea"
+                        placeholder="e.g. 45 min HIIT this morning, totally drenched…"
+                        value={wInput}
+                        onChange={e => { setWInput(e.target.value); setWFallback(false); setWStatus(null); setWError(null); }}
+                        onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (wInput.trim()) submitWorkout({ message: wInput.trim() }); } }}
+                        disabled={wSending}
+                        rows={1}
+                      />
+                      <button
+                        className="wc-send-btn"
+                        onClick={() => { if (wInput.trim()) submitWorkout({ message: wInput.trim() }); }}
+                        disabled={wSending || !wInput.trim()}
+                      >
+                        {wSending ? "…" : "↑"}
+                      </button>
+                    </div>
+                    {wStatus && (
+                      <div className="wc-confirm">✅ {wStatus.reply}</div>
+                    )}
+                    {wFallback && (
+                      <div className="wc-fallback">
+                        <div className="wc-fallback-label">⚠️ {wError || "How intense was it?"}</div>
+                        <div className="wc-fallback-btns">
+                          {["low", "medium", "high"].map(lvl => (
+                            <button
+                              key={lvl}
+                              className="wc-fallback-btn"
+                              onClick={() => {
+                                setWFallback(false);
+                                submitWorkout({ sweat_level: lvl, exercise_type: "cardio" });
+                              }}
+                            >
+                              {lvl.charAt(0).toUpperCase() + lvl.slice(1)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {wError && !wFallback && (
+                      <div className="wc-error">{wError}</div>
+                    )}
+                  </div>
+                  </>
                 )}
 
                 {/* PRODUCTS */}
