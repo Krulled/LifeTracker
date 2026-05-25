@@ -3776,6 +3776,125 @@ def toggle_routine_step():
     return jsonify({"step_key": step_key, "completed": log.completed})
 
 
+@app.route("/api/skincare/workout-chat", methods=["POST"])
+def skincare_workout_chat():
+    """
+    Layer 2 trigger: parse a natural-language workout description, create an
+    ExerciseEntry with sweat_level stored in notes, and regenerate the routine.
+
+    NLP path:      {message: str, date: "YYYY-MM-DD"}
+    Fallback path: {sweat_level: "low"|"medium"|"high", exercise_type: str, date: "YYYY-MM-DD"}
+    """
+    data = request.get_json(force=True) or {}
+    date_str = (data.get("date") or "").strip()
+    if not date_str:
+        return jsonify({"error": "date required"}), 400
+    try:
+        target_date = date.fromisoformat(date_str)
+    except ValueError:
+        return jsonify({"error": "invalid date"}), 400
+
+    _VALID_SWEAT = {"low", "medium", "high"}
+    _VALID_TYPES = {"cardio", "strength", "flexibility", "sports", "other"}
+
+    message   = (data.get("message") or "").strip()
+    sweat_lvl = (data.get("sweat_level") or "").strip().lower()
+    ex_type   = (data.get("exercise_type") or "cardio").strip().lower()
+    name      = (data.get("name") or "Workout").strip()[:100]
+    duration  = data.get("duration_minutes")
+
+    if message:
+        # NLP path: call Groq to extract structured workout data
+        prompt = (
+            "You are a workout parser. Extract workout data from the user's message.\n"
+            "Reply with ONLY valid JSON — no prose, no markdown fences:\n"
+            '{"exercise_type": "<cardio|strength|flexibility|sports|other>", '
+            '"name": "<workout name, max 60 chars>", '
+            '"duration_minutes": <integer or null>, '
+            '"sweat_level": "<low|medium|high>"}\n\n'
+            "sweat_level rules:\n"
+            '- "high": drenched, soaked, brutal, intense, HIIT, dripping\n'
+            '- "low": light, casual, easy, walk, gentle, stretch\n'
+            '- "medium": everything else\n\n'
+            f"User message: {message}"
+        )
+        try:
+            from ai_service import _get_client, _call_with_retry
+            client = _get_client()
+            resp   = _call_with_retry(lambda: client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=120,
+                temperature=0.1,
+            ))
+            parsed    = _extract_json(resp.choices[0].message.content)
+            sweat_lvl = str(parsed.get("sweat_level", "")).strip().lower()
+            ex_type   = str(parsed.get("exercise_type", "cardio")).strip().lower()
+            name      = str(parsed.get("name", "Workout")).strip()[:100]
+            raw_dur   = parsed.get("duration_minutes")
+            duration  = int(raw_dur) if raw_dur is not None else None
+        except Exception:
+            return jsonify({"fallback": True,
+                            "error": "Could not parse workout — please choose intensity"}), 200
+
+    # Server-side enum validation (prevents dirty data reaching rule engine)
+    if sweat_lvl not in _VALID_SWEAT:
+        return jsonify({"fallback": True,
+                        "error": "Invalid sweat_level — please choose Low / Medium / High"}), 200
+    if ex_type not in _VALID_TYPES:
+        ex_type = "other"
+
+    # 60-second idempotency: skip duplicate if same date + type created in last 60s
+    from datetime import timedelta
+    cutoff = datetime.utcnow() - timedelta(seconds=60)
+    recent = ExerciseEntry.query.filter(
+        ExerciseEntry.entry_date == target_date,
+        ExerciseEntry.exercise_type == ex_type,
+        ExerciseEntry.created_at >= cutoff,
+    ).first()
+
+    if recent:
+        existing_entry = recent
+    else:
+        existing_entry = ExerciseEntry(
+            entry_date       = target_date,
+            exercise_type    = ex_type,
+            name             = name or "Workout",
+            duration_minutes = duration or 0,
+            notes            = f"sweat_level={sweat_lvl}",
+        )
+        db.session.add(existing_entry)
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            return jsonify({"error": "Failed to save workout"}), 500
+
+    # Regenerate today's skincare routine with new exercise data
+    try:
+        _generate_and_persist_routine(target_date)
+    except Exception:
+        pass  # routine regen is best-effort; entry is already saved
+
+    sweat_label = sweat_lvl.capitalize()
+    reply = (
+        f"{sweat_label}-sweat {ex_type} logged"
+        + (f" ({duration} min)" if duration else "")
+        + ". Skincare routine updated."
+    )
+
+    return jsonify({
+        "reply": reply,
+        "created_exercise": {
+            "name":             existing_entry.name,
+            "exercise_type":    existing_entry.exercise_type,
+            "duration_minutes": existing_entry.duration_minutes,
+            "sweat_level":      sweat_lvl,
+        },
+        "fallback": False,
+    })
+
+
 # ---------------------------------------------------------------------------
 # Hub today-status — single round-trip for all tile badges
 # ---------------------------------------------------------------------------
