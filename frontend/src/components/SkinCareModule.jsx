@@ -921,6 +921,7 @@ export default function SkinCareModule({ onBack }) {
                             <button
                               key={lvl}
                               className="wc-fallback-btn"
+                              disabled={wSending}
                               onClick={() => {
                                 setWFallback(false);
                                 submitWorkout({ sweat_level: lvl, exercise_type: "cardio" });
