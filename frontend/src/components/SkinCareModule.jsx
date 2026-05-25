@@ -662,6 +662,10 @@ export default function SkinCareModule({ onBack }) {
     if (tab === "products") fetchProducts();
   }, [tab, selectedDate, fetchRoutine, fetchProducts]);
 
+  useEffect(() => {
+    setWStatus(null); setWError(null); setWFallback(false);
+  }, [selectedDate]);
+
   // ── Handlers ─────────────────────────────────────────────────────────────
 
   async function submitWorkout(payload) {
