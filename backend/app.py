@@ -3603,9 +3603,32 @@ def _generate_and_persist_routine(target_date):
     Layer 2 helper: run rule engine, call Claude for 2-sentence explanation,
     upsert DailyRoutine. Returns DailyRoutine ORM object.
     """
-    products       = SkinProduct.query.all()
-    exercises      = ExerciseEntry.query.filter_by(entry_date=target_date).all()
-    routine_data   = _build_routine(products, exercises)
+    products  = SkinProduct.query.all()
+    exercises = ExerciseEntry.query.filter_by(entry_date=target_date).all()
+
+    # Step completion memory: count medicated washes already completed today.
+    # Read the existing routine JSON to identify which step_keys are medicated_wash.
+    medicated_done = 0
+    existing_for_memory = DailyRoutine.query.filter_by(routine_date=target_date).first()
+    if existing_for_memory:
+        try:
+            existing_data = json.loads(existing_for_memory.routine_json)
+            medicated_keys = {
+                step["step_key"]
+                for section in existing_data.get("sections", [])
+                for step in section.get("steps", [])
+                if step.get("product_type") == "medicated_wash"
+            }
+            if medicated_keys:
+                medicated_done = RoutineStepLog.query.filter(
+                    RoutineStepLog.log_date == target_date,
+                    RoutineStepLog.step_key.in_(medicated_keys),
+                    RoutineStepLog.completed == True,
+                ).count()
+        except Exception:
+            pass  # malformed JSON or DB error — safe to ignore, start at 0
+
+    routine_data = _build_routine(products, exercises, medicated_done=medicated_done)
     workout_ctx    = (
         ", ".join(f"{e.exercise_type} ({e.created_at.strftime('%I:%M %p')})" for e in exercises)
         or "rest day"
