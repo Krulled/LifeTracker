@@ -3389,13 +3389,51 @@ def get_skin_product_photo(product_id):
 
 
 # ── Skincare Routine Rule Engine (Layer 2 — deterministic, no LLM) ─────────
+#
+# Glossary:
+#   BP  = benzoyl peroxide (medicated acne treatment)
+#   BHA = beta hydroxy acid / salicylic acid (oil-soluble exfoliant)
+#   PIH = post-inflammatory hyperpigmentation (dark spots from healed acne)
+#   Medicated wash = any cleanser with BP or BHA active ingredients
+#
+# Sweat precedence rule:
+#   If ANY workout today has sweat_level="high" → high rules apply.
+#   "skip medicated" (low rule) only applies when ALL workouts are "low" or none logged.
+#   Multi-workout: highest sweat_level wins.
+#
+# Groq failure rollback:
+#   ExerciseEntry is NOT written to DB if Groq fails or returns invalid sweat_level.
+#   The endpoint returns {fallback: true} and the frontend shows manual buttons.
 
 _CARDIO_TYPES   = {"cardio", "sports"}
 _STRENGTH_TYPES = {"strength"}
 _MAX_MEDICATED  = 2   # max medicated washes per 24-hour cycle
 
+# Sweat intensity ranking (stored as "sweat_level=X" prefix in ExerciseEntry.notes)
+_SWEAT_LEVELS = {"high": 2, "medium": 1, "low": 0, "none": -1}
 
-def _build_routine(products, exercises):
+
+def _sweat_level_str(entry):
+    """Read sweat_level from ExerciseEntry notes prefix, or infer from exercise_type."""
+    notes = entry.notes or ""
+    if notes.startswith("sweat_level="):
+        level = notes.split("=", 1)[1].split(";")[0].strip()
+        return level if level in _SWEAT_LEVELS else "medium"
+    # ExerciseModule entries without explicit sweat_level: infer from type
+    if entry.exercise_type in _CARDIO_TYPES or entry.exercise_type in _STRENGTH_TYPES:
+        return "medium"
+    return "low"
+
+
+def _max_sweat(exercises):
+    """Return highest sweat_level string across all exercises. 'none' if list is empty."""
+    if not exercises:
+        return "none"
+    return max((_sweat_level_str(e) for e in exercises),
+               key=lambda s: _SWEAT_LEVELS.get(s, -1))
+
+
+def _build_routine(products, exercises, medicated_done=0):
     """
     Pure deterministic routine builder. No I/O, no LLM, no side effects.
 
@@ -3427,7 +3465,8 @@ def _build_routine(products, exercises):
     strength_today = [e for e in exercises if e.exercise_type in _STRENGTH_TYPES]
     has_workout    = bool(exercises)
 
-    med_used = [0]   # mutable via closure — tracks how many medicated washes assigned
+    med_used = [medicated_done]  # start at already-completed medicated count for today
+    max_sweat = _max_sweat(exercises)
 
     def _pick_cleanser(prefer=None):
         """Pick cleanser respecting medicated budget. prefer='bp'|'bha'|None."""
@@ -3491,7 +3530,12 @@ def _build_routine(products, exercises):
     # ── Post-Workout (only if workout logged today) ─────────────────────────
     if has_workout:
         pw = []
-        if cardio_today:
+        if max_sweat == "low":
+            # Low-sweat workout: skip medicated entirely, gentle rinse only
+            if gentle:
+                pw.append(_step("post_workout", 0, "Cleanse", gentle,
+                                "Low-intensity workout — gentle rinse, no medicated needed"))
+        elif cardio_today:
             c = _pick_cleanser("bp")
             is_bp = (c is not None and c.product_type == "medicated_wash"
                      and c.active_ingredients is not None
@@ -3524,8 +3568,10 @@ def _build_routine(products, exercises):
             ctx = "strength workout"
         else:
             ctx = "workout"
+        sweat_badge = f" · {max_sweat} sweat" if max_sweat not in ("none", "medium") else ""
         sections.append({"key": "post_workout", "label": "Post-Workout",
-                          "icon": "💪", "steps": pw, "workout_context": ctx})
+                          "icon": "💪", "steps": pw,
+                          "workout_context": ctx + sweat_badge})
 
     # ── Evening ────────────────────────────────────────────────────────────
     ev = []
