@@ -3797,7 +3797,7 @@ def skincare_workout_chat():
     _VALID_SWEAT = {"low", "medium", "high"}
     _VALID_TYPES = {"cardio", "strength", "flexibility", "sports", "other"}
 
-    message   = (data.get("message") or "").strip()
+    message   = (data.get("message") or "").strip()[:500]
     sweat_lvl = (data.get("sweat_level") or "").strip().lower()
     ex_type   = (data.get("exercise_type") or "cardio").strip().lower()
     name      = (data.get("name") or "Workout").strip()[:100]
@@ -3830,9 +3830,9 @@ def skincare_workout_chat():
             parsed    = _extract_json(resp.choices[0].message.content)
             sweat_lvl = str(parsed.get("sweat_level", "")).strip().lower()
             ex_type   = str(parsed.get("exercise_type", "cardio")).strip().lower()
-            name      = str(parsed.get("name", "Workout")).strip()[:100]
+            name      = (str(parsed.get("name", "")) or "Workout").strip()[:100]
             raw_dur   = parsed.get("duration_minutes")
-            duration  = int(raw_dur) if raw_dur is not None else None
+            duration  = max(0, int(raw_dur)) if raw_dur is not None else None
         except Exception:
             return jsonify({"fallback": True,
                             "error": "Could not parse workout — please choose intensity"}), 200
@@ -3845,7 +3845,6 @@ def skincare_workout_chat():
         ex_type = "other"
 
     # 60-second idempotency: skip duplicate if same date + type created in last 60s
-    from datetime import timedelta
     cutoff = datetime.utcnow() - timedelta(seconds=60)
     recent = ExerciseEntry.query.filter(
         ExerciseEntry.entry_date == target_date,
@@ -3859,7 +3858,7 @@ def skincare_workout_chat():
         existing_entry = ExerciseEntry(
             entry_date       = target_date,
             exercise_type    = ex_type,
-            name             = name or "Workout",
+            name             = name,
             duration_minutes = duration or 0,
             notes            = f"sweat_level={sweat_lvl}",
         )
