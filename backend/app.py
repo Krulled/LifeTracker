@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 # Load .env before anything else (sets GROQ_API_KEY etc.)
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
-from models import db, SleepEntry, AICache, FoodEntry, Task, Habit, HabitLog, MoodEntry, ExerciseEntry, HydrationLog, MealTemplate, MealTemplateItem, ExerciseTemplate, ExerciseTemplateItem, WeightEntry, WeeklyReview, Chore, ChoreLog, BodyMeasurement, WeeklyPlan, Supplement, SupplementLog, ScreenTimeEntry, UserProfile, SkincareLog, SkinCareStep, SkinCareStepLog, SkinConditionLog, SkinPhotoAnalysis, ScannedProduct, SkinProduct, DailyRoutine, RoutineStepLog
+from models import db, SleepEntry, AICache, FoodEntry, Task, Habit, HabitLog, MoodEntry, ExerciseEntry, HydrationLog, MealTemplate, MealTemplateItem, ExerciseTemplate, ExerciseTemplateItem, WeightEntry, WeeklyReview, Chore, ChoreLog, BodyMeasurement, WeeklyPlan, Supplement, SupplementLog, ScreenTimeEntry, UserProfile, SkincareLog, SkinCareStep, SkinCareStepLog, SkinConditionLog, SkinPhotoAnalysis, ScannedProduct, SkinProduct, DailyRoutine, RoutineStepLog, SkinWorkoutLog
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": ["http://localhost:9999", "http://127.0.0.1:9999", "http://localhost:3030", "http://127.0.0.1:3030"]}},
@@ -133,7 +133,9 @@ def calculate_fields(data: dict) -> dict:
     if sleep_time and wake_time:
         duration = minutes_between(sleep_time, wake_time)
         data["sleep_duration_minutes"] = duration
-        data["sleep_cycles"]           = round(duration / 90, 1)
+        nap_raw = data.get("nap_duration_minutes")
+        nap_min = int(nap_raw) if nap_raw not in (None, "") else 0
+        data["sleep_cycles"]           = round((duration + nap_min) / 90, 1)
     else:
         data["sleep_duration_minutes"] = None
         data["sleep_cycles"]           = None
@@ -1105,7 +1107,13 @@ def food_chat():
         "Answer questions about calories, macronutrients (protein, carbs, fat), meal planning, and exercise. "
         "Always give specific numbers for typical serving sizes — never say 'it depends' without also providing a concrete example. "
         "When suggesting foods or meals, factor in the user's remaining calorie budget for the day. "
-        "Keep every reply under 120 words. Plain text only — no markdown headers or bold."
+        "Keep every reply under 120 words. Plain text only — no markdown headers or bold.\n\n"
+        "IMPORTANT: When your reply includes specific calorie or macro numbers for one or more named foods, "
+        "append a ```drafts block on a new line AFTER your reply text — and ONLY when specific numbers are present. "
+        "Do NOT include it for general advice or replies without specific food calorie data. Format:\n"
+        "```drafts\n"
+        '[{"food_name":"<name>","calories":<int>,"protein_g":<float or null>,"carbs_g":<float or null>,"fat_g":<float or null>}]\n'
+        "```"
     )
 
     context_parts = []
@@ -1134,15 +1142,44 @@ def food_chat():
     messages.append({"role": "user", "content": message})
 
     try:
+        import re, json as _json
         from ai_service import _get_client, _call_with_retry
         client = _get_client()
         resp = _call_with_retry(lambda: client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=messages,
-            max_tokens=260,
+            max_tokens=320,
             temperature=0.45,
         ))
-        return jsonify({"reply": resp.choices[0].message.content.strip()})
+        raw = resp.choices[0].message.content.strip()
+
+        drafts = []
+        draft_pattern = r'```drafts\s*([\s\S]*?)```'
+        match = re.search(draft_pattern, raw)
+        if match:
+            try:
+                parsed = _json.loads(match.group(1).strip())
+                if isinstance(parsed, list):
+                    drafts = [
+                        {
+                            "food_name": str(d.get("food_name", "")).strip(),
+                            "calories":  int(d.get("calories") or 0),
+                            "protein_g": float(d["protein_g"]) if d.get("protein_g") is not None else None,
+                            "carbs_g":   float(d["carbs_g"])   if d.get("carbs_g")   is not None else None,
+                            "fat_g":     float(d["fat_g"])     if d.get("fat_g")     is not None else None,
+                        }
+                        for d in parsed if d.get("food_name") and d.get("calories")
+                    ]
+            except Exception:
+                pass
+            clean_reply = re.sub(draft_pattern, "", raw).strip()
+        else:
+            clean_reply = raw
+
+        result = {"reply": clean_reply}
+        if drafts:
+            result["drafts"] = drafts
+        return jsonify(result)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
@@ -1380,6 +1417,8 @@ def tasks_chat():
     if list_name not in ("work", "personal"):
         list_name = "work"
 
+    pending_edit_id = data.get("pending_edit_id")
+
     existing = Task.query.filter(
         Task.status   != "done",
         Task.list_name == list_name,
@@ -1404,58 +1443,119 @@ def tasks_chat():
         from ai_service import _get_client, _call_with_retry
         client = _get_client()
 
+        # ── Pending edit: user replied to a follow-up question ──────────────
+        if pending_edit_id:
+            task_to_edit = Task.query.get(int(pending_edit_id))
+            if task_to_edit:
+                today_str = date.today().isoformat()
+                edit_prompt = f"""Today is {today_str}.
+A user added a task and was asked if they want to set a due date or urgency level.
+Task: "{task_to_edit.title}"
+User's reply: "{message}"
+
+Extract any date or priority mentioned. Reply with ONLY valid JSON — no prose, no markdown:
+{{"due_date": "<YYYY-MM-DD or null>", "priority": <1-4 or null>, "dismissed": <true if user declined or topic is unrelated>, "reply": "<1 sentence: confirm what was updated, or acknowledge no change>"}}
+
+Priority scale: 1=Critical, 2=High, 3=Medium, 4=Low. Convert relative dates to absolute ISO dates."""
+
+                resp   = _call_with_retry(lambda: client.chat.completions.create(
+                    model="llama-3.1-8b-instant",
+                    messages=[{"role": "user", "content": edit_prompt}],
+                    max_tokens=150,
+                    temperature=0.2,
+                ))
+                parsed     = _extract_json(resp.choices[0].message.content)
+                new_date   = parsed.get("due_date")
+                new_pri    = parsed.get("priority")
+                dismissed  = parsed.get("dismissed", False)
+                edit_reply = str(parsed.get("reply", "Got it!"))
+
+                if not dismissed and (new_date or new_pri in (1, 2, 3, 4)):
+                    if new_date:
+                        try:
+                            task_to_edit.due_date = date.fromisoformat(new_date)
+                        except ValueError:
+                            pass
+                    if new_pri in (1, 2, 3, 4):
+                        task_to_edit.priority = int(new_pri)
+                    db.session.commit()
+                    return jsonify({"reply": edit_reply, "updated_task": task_to_edit.to_dict()})
+
+                # Dismissed or no info extracted — fall through to normal processing
+                if dismissed:
+                    return jsonify({"reply": edit_reply or "No problem, task stays as is!"})
+
+        # ── Add intent: create task immediately, then offer follow-up ────────
         if wants_add:
-            # Structured extraction + priority inference
-            prompt = f"""You are a task management assistant for a {list_label} task list.
+            today_str = date.today().isoformat()
+            add_prompt = f"""Today is {today_str}. You are a task management assistant for a {list_label} task list.
 
 Existing {list_label} tasks (ordered by priority):
 {tasks_text}
 
 User message: "{message}"
 
-The user wants to add a task. Extract the task title and assign a priority relative to the existing tasks.
-Priority scale: 1=Critical (urgent/blocking), 2=High (important), 3=Medium (normal work), 4=Low (nice to have).
+Extract task details. Reply with ONLY valid JSON — no prose, no markdown fences:
+{{"title": "<concise task title>", "priority": <1-4>, "due_date": "<YYYY-MM-DD or null>", "has_explicit_priority": <true if user stated urgency/importance/priority>, "has_explicit_date": <true if user mentioned a date or timeframe>, "reply": "<confirmation message>"}}
 
-Reply with ONLY valid JSON — no prose, no markdown fences:
-{{"title": "<concise task title>", "priority": <1-4>, "reply": "<1-2 sentences: confirm what was added and why you chose that priority>"}}"""
+Priority scale: 1=Critical (urgent/blocking), 2=High (important), 3=Medium (normal), 4=Low (nice to have). Default to 3 if not mentioned.
+Convert relative dates to absolute ISO dates using today={today_str}. Set null if no date mentioned.
 
-            resp = _call_with_retry(lambda: client.chat.completions.create(
+For the reply field:
+- If BOTH date and urgency were explicitly stated: confirm briefly. Example: "Added 'submit report' — due May 30, High priority."
+- If EITHER is missing: confirm with defaults, then offer to update. Example: "Added 'buy groceries' — no deadline, Medium priority. Want to change either? (e.g. 'Friday, high' or 'no thanks')" """
+
+            resp   = _call_with_retry(lambda: client.chat.completions.create(
                 model="llama-3.1-8b-instant",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=220,
+                messages=[{"role": "user", "content": add_prompt}],
+                max_tokens=260,
                 temperature=0.3,
             ))
-            parsed   = _extract_json(resp.choices[0].message.content)
-            title    = str(parsed.get("title", "")).strip()[:300]
-            priority = int(parsed.get("priority", 3))
-            reply    = str(parsed.get("reply", f"Added '{title}' to your {list_label} list."))
+            parsed               = _extract_json(resp.choices[0].message.content)
+            title                = str(parsed.get("title", "")).strip()[:300]
+            priority             = int(parsed.get("priority", 3))
+            due_date_str         = parsed.get("due_date")
+            has_explicit_priority = bool(parsed.get("has_explicit_priority", False))
+            has_explicit_date    = bool(parsed.get("has_explicit_date", False))
+            reply                = str(parsed.get("reply", f"Added '{title}' to your {list_label} list."))
 
             if not title or priority not in (1, 2, 3, 4):
                 return jsonify({"error": "Could not parse task from that message."}), 422
 
-            new_task = Task(title=title, priority=priority, list_name=list_name, status="todo")
+            due_date = None
+            if due_date_str:
+                try:
+                    due_date = date.fromisoformat(due_date_str)
+                except ValueError:
+                    pass
+
+            new_task = Task(title=title, priority=priority, due_date=due_date, list_name=list_name, status="todo")
             db.session.add(new_task)
             db.session.commit()
 
-            return jsonify({"reply": reply, "created_task": new_task.to_dict()})
+            ask_followup = not has_explicit_priority or not has_explicit_date
+            return jsonify({
+                "reply":        reply,
+                "created_task": new_task.to_dict(),
+                "ask_followup": ask_followup,
+            })
 
-        else:
-            # Regular prioritization chat
-            prompt = (
-                f"You are a concise productivity assistant for the user's {list_label} tasks.\n"
-                f"Active {list_label} tasks:\n{tasks_text}\n\n"
-                f"User: {message}\n\n"
-                "Respond helpfully in under 120 words. "
-                "If asked to prioritize, name the specific task to tackle first and why. "
-                "Never repeat the task list verbatim."
-            )
-            resp = _call_with_retry(lambda: client.chat.completions.create(
-                model="llama-3.1-8b-instant",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=250,
-                temperature=0.7,
-            ))
-            return jsonify({"reply": resp.choices[0].message.content.strip()})
+        # ── Regular prioritization chat ───────────────────────────────────────
+        prompt = (
+            f"You are a concise productivity assistant for the user's {list_label} tasks.\n"
+            f"Active {list_label} tasks:\n{tasks_text}\n\n"
+            f"User: {message}\n\n"
+            "Respond helpfully in under 120 words. "
+            "If asked to prioritize, name the specific task to tackle first and why. "
+            "Never repeat the task list verbatim."
+        )
+        resp = _call_with_retry(lambda: client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=250,
+            temperature=0.7,
+        ))
+        return jsonify({"reply": resp.choices[0].message.content.strip()})
 
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
@@ -1527,6 +1627,15 @@ def upsert_weight():
         )
         db.session.add(entry)
     db.session.commit()
+
+    # Sync UserProfile.weight_lbs to the most recent weight entry
+    latest = WeightEntry.query.order_by(WeightEntry.entry_date.desc()).first()
+    if latest:
+        profile = UserProfile.query.first()
+        if profile:
+            profile.weight_lbs = latest.weight_lbs
+            db.session.commit()
+
     return jsonify(entry.to_dict()), 200
 
 
@@ -2412,6 +2521,90 @@ def exercise_ai_summary():
         return jsonify({"error": str(exc)}), 500
 
 
+# ---------------------------------------------------------------------------
+# Exercise MET lookup table — keyword matching, most-specific first
+# MET tiers: 7.5 heavy compound, 6.0 moderate compound, 5.0 machine/cable,
+#            4.2 lower-body isolation, 3.8 upper-body isolation
+# ---------------------------------------------------------------------------
+_STRENGTH_MET_TABLE = [
+    # Multi-word patterns checked before their component words
+    ("hack squat",          5.0),
+    ("split squat",         6.0),
+    ("hip thrust",          7.5),
+    ("power clean",         7.5),
+    ("trap bar",            7.5),
+    ("romanian deadlift",   7.5),
+    ("rdl",                 7.5),
+    ("sumo deadlift",       7.5),
+    ("bench press",         6.0),
+    ("overhead press",      6.0),
+    ("incline press",       6.0),
+    ("decline press",       6.0),
+    ("chest press",         5.0),
+    ("lat pulldown",        5.0),
+    ("cable pullover",      5.0),
+    ("cable row",           5.0),
+    ("seated row",          5.0),
+    ("leg press",           5.0),
+    ("leg extension",       4.2),
+    ("leg curl",            4.2),
+    ("calf raise",          4.2),
+    ("glute kickback",      4.2),
+    ("hip abduction",       4.2),
+    ("hip adduction",       4.2),
+    ("lateral raise",       3.8),
+    ("front raise",         3.8),
+    ("face pull",           3.8),
+    ("pec deck",            3.8),
+    ("reverse fly",         3.8),
+    ("wrist curl",          3.8),
+    ("tricep extension",    3.8),
+    ("overhead extension",  3.8),
+    ("pull-up",             6.0),
+    ("pull up",             6.0),
+    ("chin-up",             6.0),
+    ("chin up",             6.0),
+    ("step-up",             6.0),
+    ("step up",             6.0),
+    ("kb swing",            6.0),
+    # Single-word patterns
+    ("pullup",              6.0),
+    ("chinup",              6.0),
+    ("deadlift",            7.5),
+    ("clean",               7.5),
+    ("snatch",              7.5),
+    ("squat",               7.5),
+    ("pulldown",            5.0),
+    ("pullover",            5.0),
+    ("row",                 6.0),
+    ("dip",                 6.0),
+    ("lunge",               6.0),
+    ("kettlebell",          6.0),
+    ("swing",               6.0),
+    ("press",               6.0),
+    ("curl",                3.8),
+    ("tricep",              3.8),
+    ("pushdown",            3.8),
+    ("fly",                 3.8),
+    ("shrug",               3.8),
+    ("raise",               3.8),
+    ("extension",           3.8),
+    ("glute",               4.2),
+    ("calf",                4.2),
+    ("abduction",           4.2),
+    ("adduction",           4.2),
+]
+_DEFAULT_MET = 4.0
+
+
+def _lookup_met(name: str) -> float:
+    n = name.lower()
+    for keyword, met in _STRENGTH_MET_TABLE:
+        if keyword in n:
+            return met
+    return _DEFAULT_MET
+
+
 @app.route("/api/exercise/estimate-calories", methods=["POST"])
 def exercise_estimate_calories():
     data      = request.get_json(force=True) or {}
@@ -2424,95 +2617,57 @@ def exercise_estimate_calories():
     last_weight = WeightEntry.query.order_by(WeightEntry.entry_date.desc()).first()
     body_lbs    = float(last_weight.weight_lbs) if last_weight else 175.0
     body_kg     = round(body_lbs / 2.2046, 1)
-    # Calories burned per minute at MET 1.0 for this athlete
     cal_per_min_per_met = (3.5 * body_kg) / 200.0
 
-    # Pre-calculate timing for each exercise so the model only classifies MET
-    ex_details = []
+    computed = []
+    ex_summary_lines = []
     for e in valid_ex:
-        name   = e["name"].strip()
+        name   = (e.get("name") or "").strip()
         sets   = max(1, int(e.get("sets")  or 3))
         reps   = max(1, int(e.get("reps")  or 8))
         weight = e.get("weight_lbs") or None
 
-        # Rest period: shorter for hypertrophy, longer for heavy strength
         if reps <= 5:
-            rest_sec, load_mult = 150, 1.15   # heavy/neural
+            rest_sec, load_mult = 150, 1.15
         elif reps >= 13:
-            rest_sec, load_mult = 60,  0.90   # light/endurance
+            rest_sec, load_mult = 60,  0.90
         else:
-            rest_sec, load_mult = 90,  1.0    # standard hypertrophy
+            rest_sec, load_mult = 90,  1.0
 
-        # Total time = time under tension + rest between sets + 30 s setup
-        tut_sec   = sets * reps * 3           # 3 seconds per rep
-        rest_total = (sets - 1) * rest_sec
-        duration_min = round((tut_sec + rest_total + 30) / 60.0, 2)
+        tut_sec      = sets * reps * 3
+        rest_total   = (sets - 1) * rest_sec
+        duration_min = (tut_sec + rest_total + 30) / 60.0
 
+        met      = _lookup_met(name)
+        calories = round(met * cal_per_min_per_met * duration_min * load_mult)
+
+        computed.append({"name": name, "calories": calories})
         weight_str = f"{weight} lbs" if weight else "bodyweight"
-        ex_details.append({
-            "name":         name,
-            "sets":         sets,
-            "reps":         reps,
-            "weight_str":   weight_str,
-            "duration_min": duration_min,
-            "load_mult":    load_mult,
-        })
+        ex_summary_lines.append(f"- {name} {sets}×{reps} @ {weight_str}: {calories} cal")
 
-    # Build the exercise block for the prompt
-    ex_lines = []
-    for i, ex in enumerate(ex_details, 1):
-        ex_lines.append(
-            f"{i}. {ex['name']} — {ex['sets']}×{ex['reps']} @ {ex['weight_str']}\n"
-            f"   Pre-calculated duration: {ex['duration_min']} min | Load multiplier: {ex['load_mult']}\n"
-            f"   Formula: calories = MET × {cal_per_min_per_met:.4f} × {ex['duration_min']} × {ex['load_mult']}"
-        )
-    ex_block = "\n".join(ex_lines)
+    total = sum(ex["calories"] for ex in computed)
 
-    prompt = (
-        f"You are an exercise scientist. Your only job is to assign the correct MET value to each exercise "
-        f"and compute calories using the pre-calculated formula. Do not change the duration or load multiplier.\n\n"
-        f"Athlete: {body_lbs} lbs ({body_kg} kg)\n\n"
-        f"MET REFERENCE TABLE (use the closest match):\n"
-        f"  7.5 — Heavy compound: squat, deadlift, Romanian deadlift, power clean, trap bar deadlift, barbell hip thrust\n"
-        f"  6.0 — Moderate compound: bench press, overhead press, incline press, barbell/dumbbell row, pull-up, chin-up, "
-        f"dip, lunge, Bulgarian split squat, step-up, kettlebell swing\n"
-        f"  5.0 — Machine/cable compound: leg press, lat pulldown, cable row, chest press machine, cable pullover, "
-        f"seated row, hack squat machine\n"
-        f"  3.8 — Upper body isolation: curl (any), tricep extension/pushdown/overhead, lateral raise, front raise, "
-        f"face pull, chest fly/pec deck, shrug, reverse fly, wrist curl\n"
-        f"  4.2 — Lower body isolation: leg extension, leg curl (seated/lying), calf raise, glute kickback, "
-        f"hip abduction/adduction\n\n"
-        f"EXERCISES:\n{ex_block}\n\n"
-        f"For each exercise: pick the MET, compute calories = MET × {cal_per_min_per_met:.4f} × duration × load_mult, "
-        f"round to nearest integer.\n\n"
-        f"Output ONLY valid JSON, no markdown:\n"
-        f'{{"exercises":[{{"name":"<exact name>","met":<number>,"calories":<integer>}}],'
-        f'"total":<sum of all calories>,"note":"<one sentence on session intensity or muscle focus>"}}'
-    )
-
+    # LLM used only for the one-sentence note
+    note = ""
     try:
         from ai_service import _get_client, _call_with_retry
-        import json as _json
+        ex_list = "\n".join(ex_summary_lines)
+        note_prompt = (
+            f"Athlete {body_lbs:.0f} lbs. Today's strength session ({total} cal total):\n{ex_list}\n\n"
+            f"Write one short sentence about session intensity or primary muscle groups worked."
+        )
         client = _get_client()
         resp = _call_with_retry(lambda: client.chat.completions.create(
             model="llama-3.1-8b-instant",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=500,
-            temperature=0.1,
+            messages=[{"role": "user", "content": note_prompt}],
+            max_tokens=60,
+            temperature=0.5,
         ))
-        content = resp.choices[0].message.content.strip()
-        # Strip markdown code fences if present
-        if content.startswith("```"):
-            content = content.split("```")[1]
-            if content.startswith("json"):
-                content = content[4:]
-        result = _json.loads(content.strip())
-        # Recompute total server-side as a sanity check
-        if "exercises" in result:
-            result["total"] = sum(ex.get("calories", 0) for ex in result["exercises"])
-        return jsonify(result)
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+        note = resp.choices[0].message.content.strip()
+    except Exception:
+        pass
+
+    return jsonify({"exercises": computed, "total": total, "note": note})
 
 
 # ---------------------------------------------------------------------------
@@ -3414,12 +3569,15 @@ _SWEAT_LEVELS = {"high": 2, "medium": 1, "low": 0, "none": -1}
 
 
 def _sweat_level_str(entry):
-    """Read sweat_level from ExerciseEntry notes prefix, or infer from exercise_type."""
-    notes = entry.notes or ""
+    """Read sweat_level from a SkinWorkoutLog or legacy ExerciseEntry."""
+    # SkinWorkoutLog has a direct sweat_level field
+    if hasattr(entry, "sweat_level") and entry.sweat_level in _SWEAT_LEVELS:
+        return entry.sweat_level
+    # Legacy ExerciseEntry: parse from notes prefix
+    notes = getattr(entry, "notes", "") or ""
     if notes.startswith("sweat_level="):
         level = notes.split("=", 1)[1].split(";")[0].strip()
         return level if level in _SWEAT_LEVELS else "medium"
-    # ExerciseModule entries without explicit sweat_level: infer from type
     if entry.exercise_type in _CARDIO_TYPES or entry.exercise_type in _STRENGTH_TYPES:
         return "medium"
     return "low"
@@ -3562,8 +3720,14 @@ def _build_routine(products, exercises, medicated_done=0):
             pw.append(_step("post_workout", len(pw), "Moisturize", moisturizer, "Rehydrate after cleansing"))
 
         if cardio_today:
-            t   = cardio_today[0].created_at
-            ctx = f"cardio · logged {t.strftime('%I:%M %p')}"
+            _e = cardio_today[0]
+            _time_str = getattr(_e, "logged_at_pst", None)
+            if not _time_str:
+                from zoneinfo import ZoneInfo as _ZI
+                from datetime import timezone as _tz2
+                _t_local = _e.created_at.replace(tzinfo=_tz2.utc).astimezone(_ZI("America/Los_Angeles"))
+                _time_str = _t_local.strftime("%I:%M %p")
+            ctx = f"cardio · logged {_time_str}"
         elif strength_today:
             ctx = "strength workout"
         else:
@@ -3598,13 +3762,19 @@ def _build_routine(products, exercises, medicated_done=0):
 
 # ── Routine Endpoint Helpers ───────────────────────────────────────────────
 
-def _generate_and_persist_routine(target_date):
+def _generate_and_persist_routine(target_date, skip_explanation=False):
     """
-    Layer 2 helper: run rule engine, call Claude for 2-sentence explanation,
-    upsert DailyRoutine. Returns DailyRoutine ORM object.
+    Layer 2 helper: run rule engine, optionally call Claude for 2-sentence
+    explanation, upsert DailyRoutine. Returns DailyRoutine ORM object.
+
+    skip_explanation=True skips the Anthropic call (used for background
+    regeneration triggered by workout-chat to avoid memory pressure).
     """
     products  = SkinProduct.query.all()
-    exercises = ExerciseEntry.query.filter_by(entry_date=target_date).all()
+    # Only use exercises logged via the skincare workout chat (notes start with "sweat_level=")
+    exercises = SkinWorkoutLog.query.filter_by(
+        log_date=target_date,
+    ).order_by(SkinWorkoutLog.created_at.desc()).all()
 
     # Step completion memory: count medicated washes already completed today.
     # Read the existing routine JSON to identify which step_keys are medicated_wash.
@@ -3629,53 +3799,65 @@ def _generate_and_persist_routine(target_date):
             pass  # malformed JSON or DB error — safe to ignore, start at 0
 
     routine_data = _build_routine(products, exercises, medicated_done=medicated_done)
-    workout_ctx    = (
-        ", ".join(f"{e.exercise_type} ({e.created_at.strftime('%I:%M %p')})" for e in exercises)
+
+    def _logged_time(entry):
+        if getattr(entry, "logged_at_pst", None):
+            return entry.logged_at_pst
+        from zoneinfo import ZoneInfo
+        from datetime import timezone as _tz
+        pst = ZoneInfo("America/Los_Angeles")
+        local_dt = entry.created_at.replace(tzinfo=_tz.utc).astimezone(pst)
+        return local_dt.strftime("%I:%M %p")
+
+    workout_ctx = (
+        ", ".join(f"{e.name or e.exercise_type} at {_logged_time(e)}" for e in exercises)
         or "rest day"
     )
 
-    explanation = None
-    api_key     = os.environ.get("ANTHROPIC_API_KEY")
-    if api_key and products:
-        try:
-            import anthropic
-            client = anthropic.Anthropic(api_key=api_key)
-            sections_summary = "; ".join(
-                f"{s['label']}: " + ", ".join(
-                    f"{st['action']} with {st['product_name'] or 'none'}"
-                    for st in s["steps"]
+    new_explanation = None
+    if not skip_explanation:
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if api_key and products:
+            try:
+                import anthropic
+                client = anthropic.Anthropic(api_key=api_key)
+                sections_summary = "; ".join(
+                    f"{s['label']}: " + ", ".join(
+                        f"{st['action']} with {st['product_name'] or 'none'}"
+                        for st in s["steps"]
+                    )
+                    for s in routine_data["sections"]
                 )
-                for s in routine_data["sections"]
-            )
-            resp = client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=200,
-                messages=[{
-                    "role": "user",
-                    "content": (
-                        f"Today's workout: {workout_ctx}.\n"
-                        f"Generated routine: {sections_summary}.\n"
-                        f"User goal: treat active breakouts and fade PIH.\n\n"
-                        "Write exactly 2 sentences explaining WHY this routine was assembled this way today. "
-                        "Be specific about which rules were triggered. Plain text only."
-                    ),
-                }],
-            )
-            explanation = resp.content[0].text.strip()
-        except Exception:
-            pass   # explanation is optional
+                resp = client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=200,
+                    messages=[{
+                        "role": "user",
+                        "content": (
+                            f"Today's workout: {workout_ctx}.\n"
+                            f"Generated routine: {sections_summary}.\n"
+                            f"User goal: treat active breakouts and fade PIH.\n\n"
+                            "Write exactly 2 sentences explaining WHY this routine was assembled this way today. "
+                            "Be specific about which rules were triggered. Plain text only."
+                        ),
+                    }],
+                )
+                new_explanation = resp.content[0].text.strip()
+            except Exception:
+                pass   # explanation is optional
 
     existing = DailyRoutine.query.filter_by(routine_date=target_date).first()
     if existing:
         existing.routine_json    = json.dumps(routine_data)
-        existing.explanation     = explanation
         existing.workout_context = workout_ctx
         existing.generated_at    = datetime.utcnow()
+        if not skip_explanation:
+            existing.explanation = new_explanation
     else:
         existing = DailyRoutine(
             routine_date    = target_date,
             routine_json    = json.dumps(routine_data),
-            explanation     = explanation,
+            explanation     = new_explanation,
             workout_context = workout_ctx,
         )
         db.session.add(existing)
@@ -3719,13 +3901,15 @@ def get_skincare_routine():
         for step in section.get("steps", []):
             step["completed"] = step_logs.get(step["step_key"], False)
 
-    return jsonify({
+    resp = jsonify({
         "routine_date":    routine_obj.routine_date.isoformat(),
         "routine":         routine_data,
         "explanation":     routine_obj.explanation,
         "workout_context": routine_obj.workout_context,
         "generated_at":    routine_obj.generated_at.isoformat(),
     })
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 @app.route("/api/skincare/routine/generate", methods=["POST"])
@@ -3802,6 +3986,7 @@ def skincare_workout_chat():
     ex_type   = (data.get("exercise_type") or "cardio").strip().lower()
     name      = (data.get("name") or "Workout").strip()[:100]
     duration  = data.get("duration_minutes")
+    logged_at = (data.get("logged_at") or "").strip()[:10]   # client local time "HH:MM AM/PM"
 
     if message:
         # NLP path: call Groq to extract structured workout data
@@ -3846,21 +4031,22 @@ def skincare_workout_chat():
 
     # 60-second idempotency: skip duplicate if same date + type created in last 60s
     cutoff = datetime.utcnow() - timedelta(seconds=60)
-    recent = ExerciseEntry.query.filter(
-        ExerciseEntry.entry_date == target_date,
-        ExerciseEntry.exercise_type == ex_type,
-        ExerciseEntry.created_at >= cutoff,
+    recent = SkinWorkoutLog.query.filter(
+        SkinWorkoutLog.log_date      == target_date,
+        SkinWorkoutLog.exercise_type == ex_type,
+        SkinWorkoutLog.created_at    >= cutoff,
     ).first()
 
     if recent:
         existing_entry = recent
     else:
-        existing_entry = ExerciseEntry(
-            entry_date       = target_date,
+        existing_entry = SkinWorkoutLog(
+            log_date         = target_date,
             exercise_type    = ex_type,
             name             = name,
-            duration_minutes = duration or 0,
-            notes            = f"sweat_level={sweat_lvl}",
+            sweat_level      = sweat_lvl,
+            logged_at_pst    = logged_at or None,
+            duration_minutes = duration or None,
         )
         db.session.add(existing_entry)
         try:
@@ -3869,9 +4055,9 @@ def skincare_workout_chat():
             db.session.rollback()
             return jsonify({"error": "Failed to save workout"}), 500
 
-    # Regenerate today's skincare routine with new exercise data
+    # Regenerate skincare routine — skip Anthropic explanation to avoid memory pressure
     try:
-        _generate_and_persist_routine(target_date)
+        _generate_and_persist_routine(target_date, skip_explanation=True)
     except Exception:
         pass  # routine regen is best-effort; entry is already saved
 
@@ -4163,13 +4349,20 @@ def weekly_insights():
     today    = date.fromisoformat(date_str) if date_str else date.today()
     week_ago = today - timedelta(days=7)
 
+    # ── Core existing modules ─────────────────────────────────────────────────
     sleep_entries = SleepEntry.query.filter(SleepEntry.entry_date >= week_ago).all()
     food_entries  = FoodEntry.query.filter(FoodEntry.entry_date  >= week_ago).all()
 
-    cal_by_day: dict = {}
+    cal_by_day:   dict = {}
+    macro_by_day: dict = {}
     for f in food_entries:
         k = f.entry_date.isoformat()
         cal_by_day[k] = cal_by_day.get(k, 0) + f.calories
+        if k not in macro_by_day:
+            macro_by_day[k] = {"protein": 0.0, "carbs": 0.0, "fat": 0.0}
+        macro_by_day[k]["protein"] += f.protein_g or 0.0
+        macro_by_day[k]["carbs"]   += f.carbs_g   or 0.0
+        macro_by_day[k]["fat"]     += f.fat_g     or 0.0
 
     week_ago_dt      = datetime.combine(week_ago, datetime.min.time())
     tasks_completed  = Task.query.filter(Task.status == "done", Task.completed_at >= week_ago_dt).count()
@@ -4179,18 +4372,41 @@ def weekly_insights():
     habit_logs_count = HabitLog.query.filter(HabitLog.log_date >= week_ago, HabitLog.habit_id.in_([h.id for h in habits])).count()
     habit_possible   = len(habits) * 7
 
-    # Mood
     mood_entries  = MoodEntry.query.filter(MoodEntry.entry_date >= week_ago).all()
-    # Exercise
     ex_entries    = ExerciseEntry.query.filter(ExerciseEntry.entry_date >= week_ago).all()
     ex_minutes    = sum(e.duration_minutes for e in ex_entries)
-    # Hydration
+    ex_cal_burned = sum(e.calories_burned or 0 for e in ex_entries)
     hydration_wk  = HydrationLog.query.filter(HydrationLog.log_date >= week_ago).all()
 
+    # ── New modules ───────────────────────────────────────────────────────────
+    week_start   = today - timedelta(days=today.weekday())
+    weekly_plan  = WeeklyPlan.query.filter_by(week_start=week_start).first()
+
+    weight_wk    = WeightEntry.query.filter(WeightEntry.entry_date >= week_ago).order_by(WeightEntry.entry_date).all()
+    skincare_wk  = SkincareLog.query.filter(SkincareLog.log_date >= week_ago).all()
+    skin_cond_wk = SkinConditionLog.query.filter(SkinConditionLog.log_date >= week_ago).all()
+
+    active_supps  = Supplement.query.filter_by(is_active=True).all()
+    supp_logs_wk  = (SupplementLog.query.filter(
+        SupplementLog.log_date >= week_ago,
+        SupplementLog.supplement_id.in_([s.id for s in active_supps])
+    ).all() if active_supps else [])
+
+    chore_logs_wk = ChoreLog.query.filter(ChoreLog.log_date >= week_ago, ChoreLog.completed == True).count()
+    active_chores = Chore.query.filter_by(active=True).count()
+
+    screen_wk    = ScreenTimeEntry.query.filter(ScreenTimeEntry.entry_date >= week_ago).all()
+    body_meas_wk = BodyMeasurement.query.filter(BodyMeasurement.entry_date >= week_ago).order_by(BodyMeasurement.entry_date).all()
+
+    # ── Build strings ─────────────────────────────────────────────────────────
     if sleep_entries:
         avg_hrs    = sum((e.sleep_duration_minutes or 0) for e in sleep_entries) / len(sleep_entries) / 60
         avg_energy = sum(e.energy_score for e in sleep_entries) / len(sleep_entries)
-        sleep_str  = f"{len(sleep_entries)}/7 nights logged, avg {avg_hrs:.1f}h, avg energy {avg_energy:.1f}/10"
+        avg_stress = sum(e.stress_score for e in sleep_entries) / len(sleep_entries)
+        latency_vals = [e.sleep_latency_minutes for e in sleep_entries if e.sleep_latency_minutes is not None]
+        latency_str  = f", avg latency {sum(latency_vals)/len(latency_vals):.0f}min" if latency_vals else ""
+        sleep_str  = (f"{len(sleep_entries)}/7 nights logged, avg {avg_hrs:.1f}h, "
+                      f"energy {avg_energy:.1f}/10, stress {avg_stress:.1f}/10{latency_str}")
     else:
         sleep_str = "No sleep data this week"
 
@@ -4198,6 +4414,14 @@ def weekly_insights():
         f"Avg {int(sum(cal_by_day.values()) / len(cal_by_day))} cal/day, {len(cal_by_day)}/7 days tracked"
         if cal_by_day else "No calorie data this week"
     )
+    if macro_by_day:
+        avg_p = sum(d["protein"] for d in macro_by_day.values()) / len(macro_by_day)
+        avg_c = sum(d["carbs"]   for d in macro_by_day.values()) / len(macro_by_day)
+        avg_f = sum(d["fat"]     for d in macro_by_day.values()) / len(macro_by_day)
+        macro_str = f"{avg_p:.0f}g protein, {avg_c:.0f}g carbs, {avg_f:.0f}g fat avg/day"
+    else:
+        macro_str = None
+
     task_str   = f"{tasks_completed} completed this week, {tasks_active} still active"
     habit_rate = int(habit_logs_count / habit_possible * 100) if habit_possible else 0
     habit_str  = (
@@ -4213,29 +4437,143 @@ def weekly_insights():
     else:
         mood_str = "No mood data this week"
 
-    ex_str = (
-        f"{len(ex_entries)} sessions, {ex_minutes} total minutes"
-        if ex_entries else "No exercise logged this week"
-    )
+    ex_parts = [f"{len(ex_entries)} sessions, {ex_minutes} total minutes"]
+    if ex_cal_burned:
+        ex_parts.append(f"{ex_cal_burned} cal burned")
+    ex_str = ", ".join(ex_parts) if ex_entries else "No exercise logged this week"
 
     if hydration_wk:
-        avg_glasses = sum(l.glasses for l in hydration_wk) / len(hydration_wk)
+        avg_glasses   = sum(l.glasses for l in hydration_wk) / len(hydration_wk)
         hydration_str = f"{len(hydration_wk)}/7 days tracked, avg {avg_glasses:.1f} glasses/day"
     else:
         hydration_str = "No hydration data this week"
 
-    prompt = (
+    # Weight
+    if weight_wk:
+        avg_w  = sum(e.weight_lbs for e in weight_wk) / len(weight_wk)
+        trend  = weight_wk[-1].weight_lbs - weight_wk[0].weight_lbs if len(weight_wk) >= 2 else None
+        bf_vals = [e.body_fat_pct for e in weight_wk if e.body_fat_pct is not None]
+        w_parts = [f"{len(weight_wk)} weigh-in(s), avg {avg_w:.1f} lbs"]
+        if trend is not None:
+            w_parts.append(f"trend {trend:+.1f} lbs")
+        if bf_vals:
+            w_parts.append(f"avg body fat {sum(bf_vals)/len(bf_vals):.1f}%")
+        weight_str = ", ".join(w_parts)
+    else:
+        weight_str = None
+
+    # Skincare routine adherence
+    if skincare_wk:
+        am_done = sum(1 for s in skincare_wk if s.am_done)
+        pm_done = sum(1 for s in skincare_wk if s.pm_done)
+        skincare_str = (f"{len(skincare_wk)}/7 days logged, "
+                        f"AM {am_done}/{len(skincare_wk)}, PM {pm_done}/{len(skincare_wk)}")
+    else:
+        skincare_str = None
+
+    # Skin condition scores
+    if skin_cond_wk:
+        feel_vals     = [e.feel_score      for e in skin_cond_wk if e.feel_score      is not None]
+        breakout_vals = [e.breakout_count  for e in skin_cond_wk if e.breakout_count  is not None]
+        oiliness_vals = [e.oiliness_score  for e in skin_cond_wk if e.oiliness_score  is not None]
+        sc_parts = [f"{len(skin_cond_wk)}/7 days logged"]
+        if feel_vals:
+            sc_parts.append(f"avg feel {sum(feel_vals)/len(feel_vals):.1f}/5")
+        if breakout_vals:
+            sc_parts.append(f"avg breakouts {sum(breakout_vals)/len(breakout_vals):.1f}/3")
+        if oiliness_vals:
+            sc_parts.append(f"avg oiliness {sum(oiliness_vals)/len(oiliness_vals):.1f}/5")
+        skin_cond_str = ", ".join(sc_parts)
+    else:
+        skin_cond_str = None
+
+    # Supplements
+    if active_supps:
+        supp_possible = len(active_supps) * 7
+        supp_rate     = int(len(supp_logs_wk) / supp_possible * 100) if supp_possible else 0
+        supp_str = (f"{len(active_supps)} active, "
+                    f"{len(supp_logs_wk)}/{supp_possible} doses taken ({supp_rate}% adherence)")
+    else:
+        supp_str = None
+
+    # Chores
+    chore_str = (f"{chore_logs_wk} completions this week ({active_chores} active chores)"
+                 if active_chores > 0 else None)
+
+    # Screen time
+    if screen_wk:
+        focus_vals  = [e.focus_hours  for e in screen_wk if e.focus_hours  is not None]
+        screen_vals = [e.screen_hours for e in screen_wk if e.screen_hours is not None]
+        sc_t_parts  = [f"{len(screen_wk)}/7 days logged"]
+        if focus_vals:
+            sc_t_parts.append(f"avg focus {sum(focus_vals)/len(focus_vals):.1f}h/day")
+        if screen_vals:
+            sc_t_parts.append(f"avg screen {sum(screen_vals)/len(screen_vals):.1f}h/day")
+        screen_str = ", ".join(sc_t_parts)
+    else:
+        screen_str = None
+
+    # Body measurements (only latest this week)
+    if body_meas_wk:
+        latest   = body_meas_wk[-1]
+        bm_parts = []
+        if latest.waist_in:      bm_parts.append(f"waist {latest.waist_in}\"")
+        if latest.chest_in:      bm_parts.append(f"chest {latest.chest_in}\"")
+        if latest.hips_in:       bm_parts.append(f"hips {latest.hips_in}\"")
+        if latest.left_arm_in:   bm_parts.append(f"arm {latest.left_arm_in}\"")
+        body_meas_str = (f"{len(body_meas_wk)} measurement(s)" +
+                         (f" ({', '.join(bm_parts)})" if bm_parts else ""))
+    else:
+        body_meas_str = None
+
+    # Weekly plan targets
+    if weekly_plan:
+        plan_parts = []
+        if weekly_plan.target_sleep_hours:  plan_parts.append(f"sleep {weekly_plan.target_sleep_hours}h/night")
+        if weekly_plan.target_workouts:     plan_parts.append(f"{weekly_plan.target_workouts} workouts")
+        if weekly_plan.target_calorie_days: plan_parts.append(f"nutrition {weekly_plan.target_calorie_days} days")
+        if weekly_plan.target_habit_pct:    plan_parts.append(f"habits {weekly_plan.target_habit_pct}%")
+        weekly_plan_str = "Targets: " + ", ".join(plan_parts) if plan_parts else None
+    else:
+        weekly_plan_str = None
+
+    # ── Assemble prompt ───────────────────────────────────────────────────────
+    prompt_lines = [
         "You are a personal wellness coach giving a concise weekly review. "
-        "Be honest, specific, and encouraging. Under 180 words. No bullet headers — write as natural flowing text.\n\n"
-        f"Sleep:      {sleep_str}\n"
-        f"Mood:       {mood_str}\n"
-        f"Nutrition:  {cal_str}\n"
-        f"Exercise:   {ex_str}\n"
-        f"Hydration:  {hydration_str}\n"
-        f"Tasks:      {task_str}\n"
-        f"Habits:     {habit_str}\n\n"
-        "Identify 2-3 patterns or correlations across these areas, then give one clear, specific, actionable suggestion to improve next week."
+        "Be honest, specific, and encouraging. Under 220 words. No bullet headers — write as natural flowing text.\n\n",
+    ]
+    if weekly_plan_str:
+        prompt_lines.append(f"Goals:       {weekly_plan_str}\n")
+    nutrition_line = f"Nutrition:   {cal_str}"
+    if macro_str:
+        nutrition_line += f" | {macro_str}"
+    prompt_lines += [
+        f"Sleep:       {sleep_str}\n",
+        f"Mood:        {mood_str}\n",
+        nutrition_line + "\n",
+        f"Exercise:    {ex_str}\n",
+        f"Hydration:   {hydration_str}\n",
+        f"Tasks:       {task_str}\n",
+        f"Habits:      {habit_str}\n",
+    ]
+    if weight_str:
+        prompt_lines.append(f"Weight:      {weight_str}\n")
+    skin_parts = [p for p in [skincare_str, skin_cond_str] if p]
+    if skin_parts:
+        prompt_lines.append(f"Skincare:    {' | '.join(skin_parts)}\n")
+    if supp_str:
+        prompt_lines.append(f"Supplements: {supp_str}\n")
+    if chore_str:
+        prompt_lines.append(f"Chores:      {chore_str}\n")
+    if screen_str:
+        prompt_lines.append(f"Screen Time: {screen_str}\n")
+    if body_meas_str:
+        prompt_lines.append(f"Measurements:{body_meas_str}\n")
+    prompt_lines.append(
+        "\nIdentify 2-3 patterns or correlations across these areas, "
+        "then give one clear, specific, actionable suggestion to improve next week."
     )
+    prompt = "".join(prompt_lines)
 
     try:
         from ai_service import _get_client, _call_with_retry
@@ -4243,20 +4581,27 @@ def weekly_insights():
         resp   = _call_with_retry(lambda: client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=320,
+            max_tokens=450,
             temperature=0.7,
         ))
         return jsonify({
             "insights":     resp.choices[0].message.content.strip(),
             "generated_at": datetime.utcnow().isoformat(),
             "data_summary": {
-                "sleep_entries":   len(sleep_entries),
-                "calorie_days":    len(cal_by_day),
-                "mood_entries":    len(mood_entries),
-                "exercise_sessions": len(ex_entries),
-                "hydration_days":  len(hydration_wk),
-                "tasks_completed": tasks_completed,
-                "habits_logged":   habit_logs_count,
+                "sleep_entries":      len(sleep_entries),
+                "calorie_days":       len(cal_by_day),
+                "mood_entries":       len(mood_entries),
+                "exercise_sessions":  len(ex_entries),
+                "hydration_days":     len(hydration_wk),
+                "tasks_completed":    tasks_completed,
+                "habits_logged":      habit_logs_count,
+                "weight_entries":     len(weight_wk),
+                "skincare_days":      len(skincare_wk),
+                "skin_condition_days":len(skin_cond_wk),
+                "supplement_doses":   len(supp_logs_wk),
+                "chore_completions":  chore_logs_wk,
+                "screen_time_days":   len(screen_wk),
+                "body_measurements":  len(body_meas_wk),
             },
         })
     except Exception as exc:
@@ -5168,6 +5513,35 @@ with app.app_context():
         for _name, _tod, _ord in _sc_defaults:
             db.session.add(SkinCareStep(name=_name, time_of_day=_tod, order_index=_ord))
         db.session.commit()
+
+    # Migrate old skincare-chat ExerciseEntry rows → SkinWorkoutLog, then delete them
+    try:
+        old_sk = ExerciseEntry.query.filter(ExerciseEntry.notes.like("sweat_level=%")).all()
+        if old_sk:
+            for _e in old_sk:
+                _sweat = "medium"
+                _lat   = None
+                for _part in (_e.notes or "").split(";"):
+                    _p = _part.strip()
+                    if _p.startswith("sweat_level="):
+                        _sweat = _p.split("=",1)[1].strip()
+                    elif _p.startswith("logged_at="):
+                        _lat = _p.split("=",1)[1].strip()
+                db.session.add(SkinWorkoutLog(
+                    log_date         = _e.entry_date,
+                    exercise_type    = _e.exercise_type,
+                    name             = _e.name or "Workout",
+                    sweat_level      = _sweat,
+                    logged_at_pst    = _lat,
+                    duration_minutes = _e.duration_minutes or None,
+                    created_at       = _e.created_at,
+                ))
+                db.session.delete(_e)
+            db.session.commit()
+            print(f"Migrated {len(old_sk)} skincare workout entries from exercise_entries → skin_workout_logs")
+    except Exception as _ex:
+        db.session.rollback()
+        print(f"Skincare workout migration skipped: {_ex}")
 
     print(f"Database ready: {DB_PATH}")
     key_status = "OK" if os.environ.get("GROQ_API_KEY") else "MISSING - set GROQ_API_KEY env var"

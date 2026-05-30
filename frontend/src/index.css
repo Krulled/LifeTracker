@@ -1917,6 +1917,22 @@ tbody td.td-muted {
   white-space: nowrap;
   font-family: var(--font-mono);
 }
+.task-added-date {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+.task-chat-pending-hint {
+  margin: 0 0.75rem 0.5rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  font-size: 0.72rem;
+  color: #f59e0b;
+  line-height: 1.4;
+}
 
 /* Task list panel */
 .task-list-panel { display: flex; flex-direction: column; gap: 0; }
@@ -5254,7 +5270,6 @@ tbody td.td-muted {
   border-radius: 12px;
   font-size: 0.8rem;
   line-height: 1.5;
-  max-width: 85%;
   word-break: break-word;
 }
 .chat-msg-assistant .chat-msg-bubble {
@@ -5363,6 +5378,39 @@ tbody td.td-muted {
 }
 .calorie-chat-send:hover:not(:disabled) { opacity: 0.85; transform: scale(1.05); }
 .calorie-chat-send:disabled { opacity: 0.35; cursor: default; }
+
+.chat-msg-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+  max-width: 85%;
+}
+.chat-draft-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-left: 0.1rem;
+}
+.chat-draft-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: color-mix(in srgb, var(--success) 12%, var(--bg-elevated));
+  color: var(--success);
+  border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, border-color 0.15s;
+}
+.chat-draft-btn:hover {
+  background: color-mix(in srgb, var(--success) 22%, var(--bg-elevated));
+  border-color: var(--success);
+}
 
 /* ============================================================
    Energy Balance Card (hub)
@@ -8695,6 +8743,21 @@ button, a, [role="button"], input[type="range"] {
 .sc-analysis-drop-icon { font-size: 2rem; margin-bottom: 0.5rem; }
 .sc-analysis-drop-text { font-size: 0.9rem; font-weight: 600; color: var(--text); margin-bottom: 0.25rem; }
 .sc-analysis-drop-sub  { font-size: 0.75rem; color: var(--text-dim); }
+.sc-analysis-source-btns {
+  display: flex; gap: 0.5rem; margin: 0.5rem 0 0.3rem;
+}
+.sc-analysis-source-btn {
+  flex: 1; padding: 0.4rem 0.75rem;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+  font-size: 0.8rem; font-weight: 600;
+  cursor: pointer; transition: background 0.15s, border-color 0.15s;
+}
+.sc-analysis-source-btn:hover {
+  background: rgba(0,212,170,0.1); border-color: var(--accent);
+}
 .sc-analysis-loading {
   display: flex; align-items: center; justify-content: center;
   gap: 0.75rem; padding: 1.5rem; color: var(--text-dim); font-size: 0.9rem;

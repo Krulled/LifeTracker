@@ -397,7 +397,8 @@ function SkinAnalysisPanel({ selectedDate, onApplied }) {
   const [applying, setApplying] = useState(false);
   const [applied,  setApplied]  = useState(false);
   const [history,  setHistory]  = useState([]);
-  const fileRef = useRef(null);
+  const fileRef   = useRef(null);
+  const uploadRef = useRef(null);
 
   const fetchHistory = useCallback(async () => {
     const r    = await fetch("/api/skincare/photo-analyses?days=60");
@@ -466,12 +467,16 @@ function SkinAnalysisPanel({ selectedDate, onApplied }) {
               onDragOver={e => { e.preventDefault(); setDragging(true); }}
               onDragLeave={() => setDragging(false)}
               onDrop={onDrop}
-              onClick={() => fileRef.current?.click()}
             >
-              <input ref={fileRef} type="file" accept="image/*" style={{ display:"none" }} onChange={onFileChange} capture="user" />
+              <input ref={fileRef}   type="file" accept="image/*" style={{ display:"none" }} onChange={onFileChange} capture="user" />
+              <input ref={uploadRef} type="file" accept="image/*" style={{ display:"none" }} onChange={onFileChange} />
               <div className="sc-analysis-drop-icon">📷</div>
-              <div className="sc-analysis-drop-text">Tap to take photo or upload</div>
-              <div className="sc-analysis-drop-sub">Analyzed by Claude Sonnet · stored privately</div>
+              <div className="sc-analysis-drop-text">Analyze your skin</div>
+              <div className="sc-analysis-source-btns">
+                <button className="sc-analysis-source-btn" onClick={() => fileRef.current?.click()}>📷 Snap</button>
+                <button className="sc-analysis-source-btn" onClick={() => uploadRef.current?.click()}>📁 Upload</button>
+              </div>
+              <div className="sc-analysis-drop-sub">Or drag &amp; drop · Analyzed by Claude Sonnet</div>
             </div>
           )}
 
@@ -490,7 +495,14 @@ function SkinAnalysisPanel({ selectedDate, onApplied }) {
               {result.report && <div className="sc-analysis-report">{result.report}</div>}
               <div className="sc-analysis-actions">
                 <button className="btn btn-primary btn-sm" onClick={applyToLog} disabled={applying || applied}>
-                  {applied ? "✓ Applied to Today's Log" : applying ? "Applying…" : "Apply to Today's Log"}
+                  {applied
+                    ? "✓ Applied"
+                    : applying
+                    ? "Applying…"
+                    : selectedDate === localDateISO()
+                    ? "Apply to Today's Log"
+                    : `Apply to ${new Date(selectedDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+                  }
                 </button>
                 <button className="btn btn-sm" onClick={() => { setResult(null); setApplied(false); setError(null); }}>
                   New Photo
@@ -623,7 +635,7 @@ export default function SkinCareModule({ onBack }) {
     setRoutineLoading(true);
     setRoutineError(null);
     try {
-      const res  = await fetch(`/api/skincare/routine?date=${d}`);
+      const res  = await fetch(`/api/skincare/routine?date=${d}&_t=${Date.now()}`);
       const data = await res.json();
       setRoutine(data.routine || null);
       setRoutineExplanation(data.explanation || null);
@@ -671,11 +683,16 @@ export default function SkinCareModule({ onBack }) {
   async function submitWorkout(payload) {
     setWSending(true);
     setWError(null);
+    const now      = new Date();
+    const logged_at = now.toLocaleTimeString("en-US", {
+      hour: "2-digit", minute: "2-digit", hour12: true,
+      timeZone: "America/Los_Angeles",
+    });
     try {
       const res  = await fetch("/api/skincare/workout-chat", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ ...payload, date: selectedDate }),
+        body:    JSON.stringify({ ...payload, date: selectedDate, logged_at }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -723,13 +740,20 @@ export default function SkinCareModule({ onBack }) {
   }
 
   async function regenerateRoutine() {
+    setRoutine(null);
     setRoutineLoading(true);
     try {
-      await fetch("/api/skincare/routine/generate", {
+      const res = await fetch("/api/skincare/routine/generate", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ date: selectedDate }),
       });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setRoutineError(err.error || "Regeneration failed");
+        setRoutineLoading(false);
+        return;
+      }
       await fetchRoutine(selectedDate);
     } catch {
       setRoutineError("Regeneration failed");

@@ -143,7 +143,7 @@ const CHAT_SUGGESTIONS = [
   "Avocado toast calories?",
 ];
 
-function CalorieChatbot({ todayEntries, goal }) {
+function CalorieChatbot({ todayEntries, goal, onDraftEntry }) {
   const [messages,  setMessages]  = useState([
     { role: "assistant", content: "Ask me about calories in any food — I'll give you quick estimates to help plan your meals." },
   ]);
@@ -193,7 +193,7 @@ function CalorieChatbot({ todayEntries, goal }) {
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || "Request failed");
-      setMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
+      setMessages(prev => [...prev, { role: "assistant", content: data.reply, drafts: data.drafts || [] }]);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -218,7 +218,23 @@ function CalorieChatbot({ todayEntries, goal }) {
         {messages.map((m, i) => (
           <div key={i} className={`chat-msg chat-msg-${m.role}`}>
             {m.role === "assistant" && <span className="chat-msg-avatar">🤖</span>}
-            <div className="chat-msg-bubble">{m.content}</div>
+            <div className="chat-msg-col">
+              <div className="chat-msg-bubble">{m.content}</div>
+              {m.drafts && m.drafts.length > 0 && (
+                <div className="chat-draft-btns">
+                  {m.drafts.map((d, di) => (
+                    <button
+                      key={di}
+                      className="chat-draft-btn"
+                      onClick={() => onDraftEntry && onDraftEntry(d)}
+                      title="Pre-fill day panel form with this food"
+                    >
+                      ➕ {d.food_name} · {d.calories} cal → Log
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         ))}
         {loading && (
@@ -397,7 +413,7 @@ function MealSection({
   );
 }
 
-function CalorieDayPanel({ date, goal, onGoalChange, onMutated }) {
+function CalorieDayPanel({ date, goal, onGoalChange, onMutated, prefillEntry, onPrefillConsumed }) {
   const [entries,       setEntries]       = useState([]);
   const [loading,       setLoading]       = useState(false);
   const [activeForm,    setActiveForm]    = useState(null);
@@ -475,6 +491,20 @@ function CalorieDayPanel({ date, goal, onGoalChange, onMutated }) {
 
   useEffect(() => { fetchEntries(); setActiveForm(null); setError(null); }, [date, fetchEntries]);
 
+  useEffect(() => {
+    if (!prefillEntry) return;
+    setForm({
+      food_name: prefillEntry.food_name || "",
+      calories:  prefillEntry.calories  != null ? String(prefillEntry.calories)  : "",
+      protein_g: prefillEntry.protein_g != null ? String(prefillEntry.protein_g) : "",
+      carbs_g:   prefillEntry.carbs_g   != null ? String(prefillEntry.carbs_g)   : "",
+      fat_g:     prefillEntry.fat_g     != null ? String(prefillEntry.fat_g)     : "",
+    });
+    setActiveForm(defaultMealType());
+    setError(null);
+    onPrefillConsumed && onPrefillConsumed();
+  }, [prefillEntry]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const total = useMemo(() => entries.reduce((s, e) => ({
     calories:  s.calories  + e.calories,
     protein_g: s.protein_g + (e.protein_g || 0),
@@ -544,6 +574,7 @@ function CalorieDayPanel({ date, goal, onGoalChange, onMutated }) {
   }
 
   async function handleDelete(id) {
+    if (!window.confirm("Delete this food entry?")) return;
     // Remove immediately — no loading flash
     setEntries(prev => prev.filter(e => e.id !== id));
     fetch(`/api/food/${id}`, { method: "DELETE" });
@@ -810,12 +841,22 @@ function WeeklyCalorieSummary({ summary, goal }) {
 
 const DEFAULT_GOAL = 2000;
 
+function defaultMealType() {
+  const h = new Date().getHours();
+  if (h < 11) return "breakfast";
+  if (h < 15) return "lunch";
+  if (h < 20) return "dinner";
+  return "snack";
+}
+
 export default function CalorieModule({ onBack }) {
   const [summary,      setSummary]      = useState({});
-  const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(() => todayKey());
   const [goal,         setGoal]         = useState(() => parseInt(localStorage.getItem("cal_goal") || DEFAULT_GOAL, 10));
   const [refreshKey,   setRefreshKey]   = useState(0);
   const [todayEntries, setTodayEntries] = useState([]);
+  const [pendingDraft, setPendingDraft] = useState(null);
+  const goalDebounceRef = useRef(null);
 
   const todayStr = todayKey();
 
@@ -854,11 +895,14 @@ export default function CalorieModule({ onBack }) {
   function handleGoalChange(val) {
     setGoal(val);
     localStorage.setItem("cal_goal", val);
-    fetch("/api/profile/calorie-goal", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ calorie_goal: val }),
-    }).catch(() => {});
+    clearTimeout(goalDebounceRef.current);
+    goalDebounceRef.current = setTimeout(() => {
+      fetch("/api/profile/calorie-goal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ calorie_goal: val }),
+      }).catch(() => {});
+    }, 500);
   }
 
   return (
@@ -887,7 +931,7 @@ export default function CalorieModule({ onBack }) {
                 selectedDate={selectedDate}
               />
               <WeeklyCalorieSummary summary={summary} goal={goal} />
-              <CalorieChatbot todayEntries={todayEntries} goal={goal} />
+              <CalorieChatbot todayEntries={todayEntries} goal={goal} onDraftEntry={d => { setSelectedDate(todayKey()); setPendingDraft(d); }} />
             </div>
             <div>
               <CalorieDayPanel
@@ -895,6 +939,8 @@ export default function CalorieModule({ onBack }) {
                 goal={goal}
                 onGoalChange={handleGoalChange}
                 onMutated={() => { setRefreshKey(k => k + 1); }}
+                prefillEntry={pendingDraft}
+                onPrefillConsumed={() => setPendingDraft(null)}
               />
             </div>
           </div>

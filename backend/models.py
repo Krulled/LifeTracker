@@ -879,3 +879,17 @@ class RoutineStepLog(db.Model):
             "completed":    self.completed,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
         }
+
+
+class SkinWorkoutLog(db.Model):
+    """Workout events logged via the skincare chat — isolated from the main Exercise module."""
+    __tablename__ = "skin_workout_logs"
+
+    id               = db.Column(db.Integer,     primary_key=True, autoincrement=True)
+    log_date         = db.Column(db.Date,        nullable=False, index=True)
+    exercise_type    = db.Column(db.String(30),  nullable=False, default="cardio")
+    name             = db.Column(db.String(100), nullable=False, default="Workout")
+    sweat_level      = db.Column(db.String(10),  nullable=False, default="medium")
+    logged_at_pst    = db.Column(db.String(20),  nullable=True)   # "HH:MM AM/PM" client-local
+    duration_minutes = db.Column(db.Integer,     nullable=True)
+    created_at       = db.Column(db.DateTime,    default=datetime.utcnow, nullable=False)
