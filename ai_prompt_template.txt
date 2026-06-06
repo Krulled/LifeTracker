@@ -1,0 +1,106 @@
+SLEEP DATA ANALYSIS PROMPT
+==========================
+
+You are a data analyst and sleep science expert. Below is my personal sleep tracking JSON data.
+Please perform a thorough analysis across the following dimensions and output actionable recommendations.
+
+---
+
+DATASET OVERVIEW
+----------------
+- Analyze ALL entries in the "entries" array.
+- Note the date range, total nights tracked, and any gaps in tracking.
+- Identify the most common tags and flag any data quality issues.
+
+---
+
+ANALYSIS TASKS
+--------------
+
+1. CAFFEINE CUTOFF vs MORNING INERTIA
+   - For each entry that has a caffeine_cutoff_time, compare it to the next morning's
+     inertia_score (the entry with the following date).
+   - Bucket cutoff times into groups: before 13:00, 13:00-15:00, 15:00-17:00, after 17:00.
+   - Calculate average inertia score for each bucket.
+   - Report: Does earlier caffeine cutoff correlate with higher inertia (easier wake)?
+   - Flag any surprising outliers.
+
+2. DAILY MILES WALKED vs NEXT-DAY ENERGY SCORE
+   - For each entry, compare miles_walked to the NEXT entry's energy_score.
+   - Create mile-range buckets: 0-2, 2-4, 4-6, 6+ miles.
+   - Calculate average next-day energy for each bucket.
+   - Report: Is there a sweet spot for daily walking that maximizes next-day energy?
+   - Account for confounding factors like sleep duration and stress score.
+
+3. SLEEP CYCLES vs WAKE QUALITY (INERTIA)
+   - Group entries by sleep_cycles rounded to nearest 0.5 (e.g., 4.0, 4.5, 5.0, 5.5, 6.0).
+   - Calculate average inertia_score for each cycle count.
+   - Report: Which cycle count produces the best morning wake quality for this person?
+   - Specifically compare 4.5 cycles (~405 min) vs 5.0 cycles (~450 min) vs 5.5 cycles (~495 min).
+   - Note: More cycles is not always better -- waking mid-cycle causes more inertia.
+
+4. TAG CORRELATIONS
+   - For each unique tag, calculate average values for:
+     * inertia_score, energy_score, sleep_duration_minutes, sleep_latency_minutes, ankle_pain_score
+   - Compare tagged nights vs untagged nights.
+   - Report: Which tags correlate with better sleep? Which with worse?
+   - Flag any tags that appear in clusters (multiple nights in a row).
+
+5. OPTIMAL SLEEP DURATION FOR THIS PERSON
+   - Bucket sleep_duration_minutes into 30-minute ranges (e.g., 330-360, 360-390, ... 510-540).
+   - For each bucket calculate: avg inertia, avg energy, avg sleep cycles.
+   - Find the duration range that maximizes (inertia_score + energy_score) / 2.
+   - Report the optimal sleep window (earliest bed time to latest, based on typical sleep_latency).
+   - Factor in out_of_bed_time to note how long lying in bed after waking affects scores.
+
+6. ANKLE PAIN & MOBILITY TRENDS
+   - Plot ankle_pain_score and ankle_mobility_score over time (describe trend).
+   - Correlate ankle scores with miles_walked (same day and previous day).
+   - Identify if high-mileage days cause next-day ankle pain/stiffness.
+   - Identify if naps correlate with better ankle recovery.
+   - If tags like #exercise_pm appear, note their effect on ankle scores.
+
+7. SLEEP LATENCY PATTERNS
+   - Analyze sleep_latency_minutes distribution.
+   - Correlate latency with: stress_score, miles_walked, caffeine_cutoff_time, tags.
+   - Report: What factors most reliably reduce time-to-sleep for this person?
+
+8. STRESS vs SLEEP QUALITY
+   - Correlate stress_score with sleep_duration_minutes, inertia_score, sleep_latency_minutes.
+   - Identify the stress threshold above which sleep quality meaningfully degrades.
+
+---
+
+OUTPUT FORMAT
+-------------
+Please structure your response as:
+
+## Executive Summary
+[3-5 bullet points of the most impactful findings]
+
+## Detailed Findings
+[One section per analysis task above, with data tables where applicable]
+
+## Personalized Recommendations
+[Numbered list of specific, actionable changes ranked by expected impact]
+Example format:
+  1. [CAFFEINE] Move caffeine cutoff to before 14:00 -- data shows X% higher inertia scores
+  2. [WALKING] Target Y-Z miles/day for optimal next-day energy
+  3. [SLEEP TIMING] Aim for X cycles (~Y minutes) based on your inertia data
+
+## Watch List
+[Trends that are concerning or warrant further tracking]
+
+---
+
+IMPORTANT NOTES FOR ANALYSIS:
+- This is a single individual's data -- do not generalize to population averages.
+- Prioritize patterns with n >= 5 data points. Flag smaller samples.
+- Ankle pain/mobility scores are inverted from typical pain scales: 1=worst, 10=best.
+- Stress score: 1=zen/no stress, 10=high stress.
+- Sleep inertia: 1=barely functional on waking, 10=jumped out of bed.
+- The person has a chronic ankle condition -- ankle trends are a primary health concern.
+
+---
+
+[PASTE YOUR EXPORTED JSON DATA BELOW THIS LINE]

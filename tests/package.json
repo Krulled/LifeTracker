@@ -1,0 +1,13 @@
+{
+  "name": "life-tracker-tests",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "debug":    "playwright test debug-agent.spec.js --reporter=list",
+    "test":     "playwright test --reporter=list",
+    "report":   "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0"
+  }
+}

@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Council Report — Nutrition Tab Findings</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8f9fa; color: #1a1a2e; line-height: 1.6; }
+  .page { max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+  .header { border-bottom: 2px solid #e2e8f0; padding-bottom: 1.5rem; margin-bottom: 2rem; }
+  .header h1 { font-size: 1.5rem; font-weight: 700; color: #1a1a2e; }
+  .header .subtitle { color: #64748b; font-size: 0.9rem; margin-top: 0.25rem; }
+  .header .question-box { background: #f1f5f9; border-left: 4px solid #6366f1; padding: 0.9rem 1.1rem; border-radius: 4px; margin-top: 1rem; font-size: 0.92rem; color: #334155; }
+
+  /* Verdict */
+  .verdict { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1.75rem; margin-bottom: 2rem; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .verdict h2 { font-size: 1.15rem; font-weight: 700; color: #1a1a2e; margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.5rem; }
+  .verdict-section { margin-bottom: 1.5rem; }
+  .verdict-section:last-child { margin-bottom: 0; }
+  .verdict-section h3 { font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #6366f1; margin-bottom: 0.6rem; }
+  .verdict-section p, .verdict-section li { font-size: 0.93rem; color: #334155; }
+  .verdict-section ul { padding-left: 1.25rem; display: flex; flex-direction: column; gap: 0.4rem; }
+
+  .one-thing { background: #6366f1; color: #fff; border-radius: 10px; padding: 1.25rem 1.5rem; margin-bottom: 2rem; }
+  .one-thing h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.07em; opacity: 0.8; margin-bottom: 0.5rem; }
+  .one-thing p { font-size: 0.95rem; font-weight: 600; line-height: 1.5; }
+
+  /* Severity grid */
+  .severity-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 2rem; }
+  .sev-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.9rem 1rem; }
+  .sev-card .finding-id { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 0.2rem; }
+  .sev-card .finding-name { font-size: 0.85rem; font-weight: 600; color: #1a1a2e; margin-bottom: 0.3rem; }
+  .sev-card .finding-verdict { font-size: 0.78rem; color: #64748b; }
+  .badge { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 99px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; margin-bottom: 0.35rem; }
+  .badge-critical { background: #fee2e2; color: #b91c1c; }
+  .badge-high     { background: #fef3c7; color: #b45309; }
+  .badge-medium   { background: #dbeafe; color: #1d4ed8; }
+  .badge-low      { background: #f0fdf4; color: #15803d; }
+  .badge-skip     { background: #f1f5f9; color: #64748b; }
+  .badge-debt     { background: #f5f3ff; color: #7c3aed; }
+
+  /* Advisor positions */
+  .advisor-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; margin-bottom: 2rem; font-size: 0.78rem; }
+  .advisor-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.75rem; }
+  .advisor-name { font-weight: 700; font-size: 0.75rem; color: #6366f1; margin-bottom: 0.4rem; }
+  .advisor-pos { color: #475569; line-height: 1.45; }
+
+  /* Collapsibles */
+  details { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 0.75rem; }
+  details summary { padding: 0.85rem 1.1rem; font-weight: 600; font-size: 0.9rem; cursor: pointer; color: #334155; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+  details summary::after { content: "▼"; font-size: 0.7rem; color: #94a3b8; }
+  details[open] summary::after { content: "▲"; }
+  details summary::-webkit-details-marker { display: none; }
+  .details-body { padding: 0 1.1rem 1rem; font-size: 0.87rem; color: #475569; line-height: 1.65; border-top: 1px solid #f1f5f9; padding-top: 0.9rem; }
+  .details-body strong { color: #1a1a2e; }
+
+  .section-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #94a3b8; margin: 2rem 0 0.75rem; }
+  .clash-note { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 0.8rem 1rem; margin-top: 0.75rem; font-size: 0.85rem; color: #78350f; }
+  .blind-spot-note { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 0.8rem 1rem; margin-top: 0.75rem; font-size: 0.85rem; color: #14532d; }
+
+  footer { text-align: center; color: #94a3b8; font-size: 0.78rem; margin-top: 3rem; border-top: 1px solid #e2e8f0; padding-top: 1.5rem; }
+
+  @media (max-width: 600px) {
+    .severity-grid { grid-template-columns: 1fr; }
+    .advisor-grid  { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <h1>🏛️ Council Report</h1>
+    <div class="subtitle">LLM Council · 5 Advisors · 5 Peer Reviewers · 1 Chairman</div>
+    <div class="question-box">
+      <strong>Question:</strong> What is the actual severity of each finding in the nutrition tab code review, which genuinely need to be fixed vs. which are acceptable tradeoffs, and what is the recommended priority order? (Single-user personal hobby life-tracker, Python Flask + React, Fly.io)
+    </div>
+  </div>
+
+  <!-- ONE THING -->
+  <div class="one-thing">
+    <h3>The One Thing to Do First</h3>
+    <p>Answer the architectural question: open CalorieModule, identify every piece of state and UI it owns that NutritionFitnessModule does not, and decide in the next 10 minutes whether that delta justifies a separate component. If it doesn't — delete CalorieModule. If it does, you have 10 minutes of bug fixes ahead of you.</p>
+  </div>
+
+  <!-- VERDICT -->
+  <div class="verdict">
+    <h2>⚖️ Chairman's Verdict</h2>
+
+    <div class="verdict-section">
+      <h3>Where the Council Agrees</h3>
+      <ul>
+        <li><strong>Findings 1 &amp; 2 are data loss bugs</strong> — every advisor ranked them first. Silent data loss means the app is lying to the user. No legitimate counterargument exists.</li>
+        <li><strong>Finding 3 is a functional regression</strong> — the user gets AI advice calibrated to wrong or missing data from the same endpoint they always used. That's a behavior change they'll notice but can't diagnose.</li>
+        <li><strong>Findings 7 &amp; 8 (performance) are real but deferred</strong> — genuine SQLite issues that don't matter at single-user scale today. Disagreement was only about <em>when</em>, not <em>whether</em>.</li>
+        <li><strong>Finding 6 is skip-level</strong> — no advisor defended it as meaningful for this context.</li>
+      </ul>
+    </div>
+
+    <div class="verdict-section">
+      <h3>Where the Council Clashes</h3>
+      <div class="clash-note">
+        <strong>Expansionist vs. everyone on Finding 5 (photo scanner):</strong> Expansionist called it the buried lead suppressing adoption. Three peer reviewers pushed back — this is a single-user app with no adoption curve. Product adoption is not a meaningful risk category here.<br><br>
+        <strong>Expansionist vs. everyone on Finding 4 as a prerequisite:</strong> Expansionist claimed TemplatesPanel extraction must happen before other fixes. Two reviewers called this explicitly inverted — cleanup never blocks a data-loss fix.<br><br>
+        <strong>First Principles vs. Executor on performance timing:</strong> First Principles said fix 7 &amp; 8 now while the table is small. Executor said defer. For a single-user app, Executor wins.
+      </div>
+    </div>
+
+    <div class="verdict-section">
+      <h3>Blind Spots the Council Caught</h3>
+      <div class="blind-spot-note">
+        <strong>Critical dependency:</strong> Finding 3 (chatbot context) cannot be correctly fixed until Findings 1+2 are done. If the goal never persisted to the server, passing <code>calorie_goal</code> to the AI just makes the wrong advice look more confident. This makes 1+2 a hard prerequisite for 3 — not just a co-priority.<br><br>
+        <strong>Architectural question nobody asked:</strong> All five advisors debated how to patch CalorieModule. All five peer reviewers independently asked whether it should exist at all. If CalorieModule is eliminated and its calendar UI merged into NutritionFitnessModule, Findings 1, 2, 4, and 5 disappear simultaneously at zero net code cost.
+      </div>
+    </div>
+
+    <div class="verdict-section">
+      <h3>The Recommendation</h3>
+      <p>Before writing code, answer the architectural question. If CalorieModule's only unique value is the calendar view, add that view to NutritionFitnessModule and delete CalorieModule — this eliminates 4 findings in one move. If it must stay separate, the fix order is:</p>
+      <ul style="margin-top:0.6rem;">
+        <li><strong>#1 + #2</strong> — persist goal to server + sync on mount (10 min total, copy from NutritionFitnessModule)</li>
+        <li><strong>#3</strong> — pass goal/consumed/burned to chatbot (10 min, only valid after 1+2)</li>
+        <li><strong>#5</strong> — wire photo scanner (1 hr, meaningful feature gap)</li>
+        <li><strong>#4</strong> — extract shared TemplatesPanel only when duplication becomes painful</li>
+        <li><strong>#7 / #8</strong> — add date filter + index when query times are noticeable, not before</li>
+        <li><strong>#6</strong> — never</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- SEVERITY GRID -->
+  <div class="section-label">Finding Severity Breakdown</div>
+  <div class="severity-grid">
+    <div class="sev-card">
+      <div class="finding-id">Finding 1</div>
+      <span class="badge badge-critical">CRITICAL</span>
+      <div class="finding-name">Goal not persisted to server</div>
+      <div class="finding-verdict">Silent data loss. UI lies to user. Fix first, 5 min.</div>
+    </div>
+    <div class="sev-card">
+      <div class="finding-id">Finding 2</div>
+      <span class="badge badge-critical">CRITICAL</span>
+      <div class="finding-name">Goal not synced from server on mount</div>
+      <div class="finding-verdict">Same root cause as #1. Same session fix. 5 min.</div>
+    </div>
+    <div class="sev-card">
+      <div class="finding-id">Finding 3</div>
+      <span class="badge badge-high">HIGH (depends on 1+2)</span>
+      <div class="finding-name">Chatbot missing calorie context</div>
+      <div class="finding-verdict">Functional regression. Misleading AI advice. 10 min — but only correct after #1+#2.</div>
+    </div>
+    <div class="sev-card">
+      <div class="finding-id">Finding 4</div>
+      <span class="badge badge-debt">TECH DEBT</span>
+      <div class="finding-name">Duplicate TemplatesPanel</div>
+      <div class="finding-verdict">Not a bug yet. Becomes a maintenance trap over time. Fix when touched.</div>
+    </div>
+    <div class="sev-card">
+      <div class="finding-id">Finding 5</div>
+      <span class="badge badge-medium">MEDIUM</span>
+      <div class="finding-name">Photo scanner missing from CalorieModule</div>
+      <div class="finding-verdict">Feature gap, not a bug. Wire it while touching CalorieModule for #1–3.</div>
+    </div>
+    <div class="sev-card">
+      <div class="finding-id">Finding 6</div>
+      <span class="badge badge-skip">SKIP</span>
+      <div class="finding-name">Macros not per-item in NutritionFitnessModule</div>
+      <div class="finding-verdict">Display preference. Data is tracked. No advisor defended this as meaningful.</div>
+    </div>
+    <div class="sev-card">
+      <div class="finding-id">Finding 7</div>
+      <span class="badge badge-low">LOW (now), HIGH (later)</span>
+      <div class="finding-name">food_daily_summary full table scan</div>
+      <div class="finding-verdict">Imperceptible at current scale. Add date filter + index when felt.</div>
+    </div>
+    <div class="sev-card">
+      <div class="finding-id">Finding 8</div>
+      <span class="badge badge-low">LOW (now)</span>
+      <div class="finding-name">fetchWeekEx limit=9999</div>
+      <div class="finding-verdict">Ugly but harmless for single-user. Defer until painful.</div>
+    </div>
+  </div>
+
+  <!-- ADVISOR POSITIONS -->
+  <div class="section-label">Advisor Positions at a Glance</div>
+  <div class="advisor-grid">
+    <div class="advisor-card">
+      <div class="advisor-name">Contrarian</div>
+      <div class="advisor-pos">Finding 1 = Critical data loss. 7 &amp; 8 = practically irrelevant for single-user SQLite. Finding 3 understated — it's a functional regression.</div>
+    </div>
+    <div class="advisor-card">
+      <div class="advisor-name">First Principles</div>
+      <div class="advisor-pos">Findings 1+2+3 are one architectural defect. 7 &amp; 8 have compounding risk — fix while small. 4/5/6 are acceptable tradeoffs.</div>
+    </div>
+    <div class="advisor-card">
+      <div class="advisor-name">Expansionist</div>
+      <div class="advisor-pos">Finding 5 is the buried lead. Finding 4 extraction is a prerequisite. Finding 7 needs an index, not just a filter. [Rejected by peer review]</div>
+    </div>
+    <div class="advisor-card">
+      <div class="advisor-name">Outsider</div>
+      <div class="advisor-pos">Finding 1 = ship nothing else first. Finding 3 = user can't diagnose why chatbot seems dumb. 7/8 = flag but defer.</div>
+    </div>
+    <div class="advisor-card">
+      <div class="advisor-name">Executor</div>
+      <div class="advisor-pos">#1+#2 = 10 min. #3 = 10 min. #4 = 20 min. #5 = 1 hr. Monday order: 1→2→3→4 = 40 minutes.</div>
+    </div>
+  </div>
+
+  <!-- COLLAPSIBLE: FULL ADVISOR RESPONSES -->
+  <div class="section-label">Full Advisor Responses</div>
+
+  <details>
+    <summary>The Contrarian</summary>
+    <div class="details-body">
+      The severity rankings here are too conservative on the bugs and too alarmist on the performance issues for a single-user hobby app.<br><br>
+      <strong>Finding 1 is Critical.</strong> Silent data loss is the worst category of failure. The user changes their goal, it appears to work, and then it silently disappears after a cache clear or new device.<br><br>
+      <strong>Finding 2</strong> is a direct consequence of Finding 1 and should be treated as the same ticket. Separating them inflates the fix count and understates the root cause: CalorieModule was built without server awareness.<br><br>
+      <strong>Finding 7</strong> — for a single-user personal app with maybe a few thousand rows across a lifetime of use, a full table scan on SQLite is going to run in milliseconds. Calling it a "full table scan" is technically correct and practically irrelevant.<br><br>
+      <strong>Finding 8</strong> — limit=9999 on a personal tracker is ugly but harmless. Flagging this as a genuine concern dilutes the severity of actual problems.<br><br>
+      <strong>Finding 3</strong> is understated. Worse AI advice is a functional regression in a feature the user presumably uses. Sending it incomplete context means it is actively misleading.<br><br>
+      <strong>Finding 4</strong> is not a bug at all right now. It is technical debt. Priority order: 1, 2, 3, 5, 4, 6, then 7 and 8 only if the app ever leaves single-user hobby status.
+    </div>
+  </details>
+
+  <details>
+    <summary>The First Principles Thinker</summary>
+    <div class="details-body">
+      The real question here is not "how severe is each finding" but "what does severity even mean for a single-user hobby project with no SLA, no other users to harm, and no production reliability contract?"<br><br>
+      <strong>Actually broken (data is wrong or silently lost):</strong> Findings 1 and 2 are the same root problem — two components that should share a single source of truth for calorie goal do not. Fix this once by centralizing goal state. Finding 3 falls here too: the chatbot giving worse advice from one view than another is a silent quality degradation the user will never diagnose. These three are one architectural defect: CalorieModule was built as an independent module instead of a consumer of shared state.<br><br>
+      <strong>Performance findings 7 and 8</strong> are the only ones with compounding risk. A full table scan on every page load will eventually become noticeable as the food log grows. This is the one finding where doing nothing has a cost that increases over time.<br><br>
+      <strong>Findings 4, 5, and 6</strong> are maintenance and UX polish. Not broken — incomplete. Recommended order: Fix goal state architecture (1+2 together), fix chatbot context (3), add date filter (7), fix limit=9999 (8), then 4/5/6 when painful.
+    </div>
+  </details>
+
+  <details>
+    <summary>The Expansionist</summary>
+    <div class="details-body">
+      The council is sleeping on what's actually here. This isn't a bug list — it's a product surface area problem.<br><br>
+      <strong>Finding 5 is the buried lead.</strong> Photo scanning is the highest-friction-to-value feature in the entire app, and it's locked behind one entry path. That's actively suppressing adoption of the best feature.<br><br>
+      Findings 1 and 2 should be fixed by unifying the components, not patching them separately. One goal state, server-authoritative, both views read from the same source.<br><br>
+      <strong>Finding 4</strong> is free money — extracting it is the prerequisite for every other improvement being cheaper.<br><br>
+      <strong>Finding 7</strong> needs an index, not just a filter. Fix it properly and you keep the app fast indefinitely. Finding 8 is the same pattern — fix properly with pagination and you build infrastructure for a future history view.<br><br>
+      Findings 3 and 6 are polish, not blockers.
+    </div>
+  </details>
+
+  <details>
+    <summary>The Outsider</summary>
+    <div class="details-body">
+      <strong>Finding 1 is a data loss bug. Ship nothing else until this is fixed.</strong> A user changes their calorie goal in the calendar view. The UI updates. They close the tab. The change is gone. They have no idea. Silent data corruption from the user's perspective — no error, no warning, nothing.<br><br>
+      <strong>Finding 2</strong> is the same bug wearing a different hat. If the goal lives in the database but CalorieModule reads localStorage, those two values will diverge. The user sees a lie every time they open the calendar view.<br><br>
+      <strong>Finding 3</strong> is a functional regression. One view of the app gives worse AI advice than another view of the same app, using the same endpoint. Users won't know why the chatbot seems dumber on Tuesdays.<br><br>
+      <strong>Finding 5</strong> is a missing feature, not a bug. Fix it when already touching CalorieModule for Findings 1–3.<br><br>
+      <strong>Finding 4</strong> is a maintenance trap. Not urgent today. Dangerous over time.<br><br>
+      <strong>Findings 7 and 8</strong> are real performance problems that don't matter yet. The table scan will hurt when FoodEntry has thousands of rows. Flag them, don't fix them now.
+    </div>
+  </details>
+
+  <details>
+    <summary>The Executor</summary>
+    <div class="details-body">
+      <strong>Fix these now (same session, under 40 min total):</strong><br><br>
+      <strong>#1</strong> — Severity: HIGH. Add a POST to <code>/api/profile/calorie-goal</code> inside <code>handleGoalChange</code> in CalorieModule, identical to what NutritionFitnessModule already does. Copy the fetch call. <strong>5 minutes.</strong><br><br>
+      <strong>#2</strong> — Severity: HIGH. Add a <code>useEffect</code> that fetches <code>/api/profile</code> on mount and sets state from the response. NutritionFitnessModule already does this — copy the pattern. <strong>5 minutes.</strong><br><br>
+      <strong>#3</strong> — Severity: MEDIUM. Pass <code>calorie_goal</code>, <code>consumed</code>, <code>burned</code> into the chatbot. <strong>10 minutes.</strong><br><br>
+      <strong>#4</strong> — Severity: LOW-MEDIUM. Extract to a shared component file. <strong>20 minutes.</strong><br><br>
+      <strong>#5</strong> — Severity: LOW. Add FoodPhotoAnalyzer import and button to CalorieModule. <strong>~1 hour.</strong><br><br>
+      <strong>#6</strong> — Cosmetic. Skip until someone asks.<br><br>
+      <strong>#7 / #8</strong> — Severity: HIGH on real data, imperceptible now. Add date filter when queries feel slow.<br><br>
+      <strong>Monday morning order: #1 → #2 → #3 → #4. That's 40 minutes of work.</strong>
+    </div>
+  </details>
+
+  <!-- COLLAPSIBLE: PEER REVIEW HIGHLIGHTS -->
+  <div class="section-label">Peer Review Highlights</div>
+
+  <details>
+    <summary>Strongest response vote: E (Executor) — 3 votes; B (First Principles) — 2 votes</summary>
+    <div class="details-body">
+      <strong>For E:</strong> Converts abstract severity ratings into actionable time estimates. "40 minutes for findings 1–4" is more useful than any priority label. Also surfaces that fixes 1 and 2 are trivially cheap by borrowing existing code from NutritionFitnessModule — a concrete observation none of the others made.<br><br>
+      <strong>For B:</strong> The only one that correctly identifies the architectural root cause and prescribes fixing it as one cohesive change. Makes the useful distinction that findings 7 and 8 have <em>compounding</em> risk over time.
+    </div>
+  </details>
+
+  <details>
+    <summary>Biggest blind spot: C (Expansionist) — unanimous (5/5 reviewers)</summary>
+    <div class="details-body">
+      C argued photo scanner adoption is "the buried lead" and that TemplatesPanel extraction is a prerequisite for other fixes. All 5 reviewers rejected this:<br><br>
+      1. This is a single-user app — "adoption" is not a risk category.<br>
+      2. Blocking a data-loss fix on a cleanup task inverts the risk hierarchy.<br>
+      3. Claiming deduplication is a prerequisite is an assertion dressed up as architectural wisdom.
+    </div>
+  </details>
+
+  <details>
+    <summary>What all advisors missed (peer review consensus)</summary>
+    <div class="details-body">
+      <strong>The Finding 3 dependency:</strong> Reviewer 4 identified a critical transitive dependency: if calorie goal never persists to the server (Findings 1+2 unfixed), then fixing Finding 3 to pass <code>calorie_goal</code> to the AI will still pass the wrong stale value from localStorage. The "fixed" chatbot would give wrong advice with more confidence. Finding 3 is not parallelizable with 1+2 — it depends on them.<br><br>
+      <strong>The architectural question:</strong> All five advisors treated the two-module architecture as a given constraint and debated how to patch it. All five peer reviewers independently asked the same question: should CalorieModule exist at all? If eliminated and the calendar view merged into NutritionFitnessModule, Findings 1, 2, 4, and 5 disappear simultaneously.
+    </div>
+  </details>
+
+  <footer>
+    Council conducted 2026-05-18 · Nutrition Tab Findings · Life Tracker App<br>
+    5 advisors · 5 peer reviewers · 1 chairman · LLM Council methodology
+  </footer>
+
+</div>
+</body>
+</html>

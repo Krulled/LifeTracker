@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Council Report — Workout Chat Panel</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8f8f8; color: #1a1a1a; line-height: 1.6; }
+  .container { max-width: 860px; margin: 0 auto; padding: 40px 24px; }
+  .header { border-bottom: 2px solid #e0e0e0; padding-bottom: 24px; margin-bottom: 32px; }
+  .header h1 { font-size: 22px; font-weight: 700; color: #111; }
+  .header .meta { font-size: 13px; color: #888; margin-top: 6px; }
+  .question-box { background: #fff; border: 1px solid #e0e0e0; border-left: 4px solid #555; border-radius: 6px; padding: 18px 20px; margin-bottom: 32px; }
+  .question-box h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #888; margin-bottom: 10px; }
+  .question-box p { font-size: 15px; color: #333; }
+
+  /* Verdict */
+  .verdict { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 28px 28px; margin-bottom: 32px; }
+  .verdict h2 { font-size: 18px; font-weight: 700; color: #111; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 12px; }
+  .verdict-section { margin-bottom: 22px; }
+  .verdict-section h3 { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #555; margin-bottom: 10px; }
+  .verdict-section p, .verdict-section li { font-size: 15px; color: #333; margin-bottom: 8px; }
+  .verdict-section ul { padding-left: 20px; }
+  .verdict-section li { margin-bottom: 6px; }
+
+  .agrees { border-left: 4px solid #2d7d46; padding-left: 16px; }
+  .clashes { border-left: 4px solid #b45309; padding-left: 16px; }
+  .blindspots { border-left: 4px solid #1d4ed8; padding-left: 16px; }
+  .recommendation { border-left: 4px solid #6d28d9; padding-left: 16px; }
+  .one-thing { background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 16px 20px; margin-top: 16px; }
+  .one-thing h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; color: #92400e; margin-bottom: 8px; }
+  .one-thing p { font-size: 15px; color: #78350f; }
+
+  /* Agreement grid */
+  .alignment-grid { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 24px; margin-bottom: 32px; }
+  .alignment-grid h2 { font-size: 15px; font-weight: 700; color: #111; margin-bottom: 16px; }
+  .grid-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .grid-table th { background: #f5f5f5; padding: 8px 12px; text-align: left; font-weight: 600; border: 1px solid #e0e0e0; color: #444; }
+  .grid-table td { padding: 8px 12px; border: 1px solid #e0e0e0; vertical-align: middle; }
+  .dot-agree { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #2d7d46; }
+  .dot-caution { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #b45309; }
+  .dot-expand { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #1d4ed8; }
+  .dot-neutral { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #9ca3af; }
+  .legend { display: flex; gap: 20px; margin-top: 12px; font-size: 12px; color: #666; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+
+  /* Collapsibles */
+  .collapsibles { margin-bottom: 32px; }
+  .collapsibles h2 { font-size: 15px; font-weight: 700; color: #111; margin-bottom: 12px; }
+  details { background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; margin-bottom: 8px; }
+  details[open] { border-color: #ccc; }
+  summary { padding: 14px 16px; cursor: pointer; font-size: 14px; font-weight: 600; color: #333; list-style: none; display: flex; align-items: center; gap: 10px; user-select: none; }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: "▶"; font-size: 10px; color: #999; transition: transform 0.2s; display: inline-block; }
+  details[open] summary::before { transform: rotate(90deg); }
+  .advisor-tag { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .tag-contrarian { background: #fef2f2; color: #b91c1c; }
+  .tag-firstprinciples { background: #eff6ff; color: #1d4ed8; }
+  .tag-expansionist { background: #f0fdf4; color: #15803d; }
+  .tag-outsider { background: #fefce8; color: #854d0e; }
+  .tag-executor { background: #f5f3ff; color: #6d28d9; }
+  .advisor-body { padding: 0 16px 16px; font-size: 14px; color: #333; border-top: 1px solid #f0f0f0; margin-top: 4px; padding-top: 12px; }
+  .advisor-body p { margin-bottom: 10px; }
+
+  .review-body { padding: 0 16px 16px; font-size: 14px; color: #333; border-top: 1px solid #f0f0f0; padding-top: 12px; }
+  .review-q { font-weight: 600; color: #555; margin-top: 10px; }
+  .review-a { margin-left: 12px; margin-top: 4px; }
+
+  .footer { font-size: 12px; color: #aaa; text-align: center; border-top: 1px solid #e0e0e0; padding-top: 20px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>LLM Council Report — Workout Chat Panel for Skincare Module</h1>
+    <div class="meta">Convened 2026-05-25 &nbsp;·&nbsp; 5 advisors &nbsp;·&nbsp; 5 peer reviews &nbsp;·&nbsp; Chairman synthesis</div>
+  </div>
+
+  <div class="question-box">
+    <h2>Question Brought to the Council</h2>
+    <p>A skincare AI system has a working 3-layer architecture (Claude vision ingest → deterministic Python rule engine → idempotent React rendering). A new "workout chat panel" is being added: a one-shot NLP input bar in the Today tab that logs workout sweat intensity, feeds the rule engine, and respects within-day step completion memory. Three capabilities: (1) Groq/Llama extracts sweat level (low/medium/high) from natural language; (2) RoutineStepLog tracks completed steps, max-2-medicated enforced against what's already DONE; (3) multi-workout accumulation — highest sweat level wins. Is this design sound? What should change before building?</p>
+  </div>
+
+  <!-- VERDICT -->
+  <div class="verdict">
+    <h2>Chairman's Verdict</h2>
+
+    <div class="verdict-section">
+      <h3 class="agrees" style="padding-left:0;border:none;">✅ Where the Council Agrees</h3>
+      <div class="agrees">
+        <p>The core architecture is sound — deterministic Python rules, LLM only for extraction, idempotent rendering — no advisor disputed this.</p>
+        <p>The <strong>Groq fallback is non-optional.</strong> Four of five advisors flagged it independently. If sweat intensity extraction fails silently, the rule engine receives garbage with clinical consequences. A manual fallback UI (low/medium/high buttons) is a prerequisite, not a polish item.</p>
+        <p>"Highest sweat wins" is correct as stated, but must be <strong>re-derived from current ExerciseEntry rows on every generation</strong> — never cached, never assumed ordered.</p>
+      </div>
+    </div>
+
+    <div class="verdict-section">
+      <h3 class="clashes" style="padding-left:0;border:none;">⚡ Where the Council Clashes</h3>
+      <div class="clashes">
+        <p><strong>Chat panel vs. three radio buttons.</strong> First Principles argues the chat panel is architectural complexity compensating for a missing data field in ExerciseModule — three radio buttons solve the actual problem without a Groq dependency. The Executor treats NLP extraction as a straight implementation task. Both are defensible in different frames. This is a product decision, not a technical one. The council cannot resolve it — but it's the highest-leverage decision in the spec.</p>
+        <p><strong>Scope.</strong> The Expansionist frames this as a general event ingestion platform. Everyone else correctly calls it scope creep on a spec with unresolved edge cases.</p>
+      </div>
+    </div>
+
+    <div class="verdict-section">
+      <h3 class="blindspots" style="padding-left:0;border:none;">🔍 Blind Spots the Council Caught</h3>
+      <div class="blindspots">
+        <ul>
+          <li><strong>Deduplication / double-write on POST.</strong> Double-tap or network retry creates two ExerciseEntry rows for one workout. Multi-workout accumulation then corrupts the sweat intensity result. POST endpoint needs idempotency (content hash, timestamp window, or upsert) before downstream rules can be trusted.</li>
+          <li><strong>Data ownership conflict (ExerciseModule + chat panel).</strong> If user logs the same session via both routes, the rule engine sees two rows for one workout. Spec must define: create new ExerciseEntry or annotate existing one?</li>
+          <li><strong>Error state persistence on Groq failure.</strong> ExerciseEntry must not be written until Groq returns a valid, enum-validated intensity. If written with null intensity, rule engine processes workout at default — silently wrong.</li>
+          <li><strong>Input validation at Flask boundary.</strong> If Groq hallucates an intensity outside {low, medium, high}, server-side enum check must block the DB write. One line. Prevents silent rule engine corruption.</li>
+          <li><strong>Edit/delete consistency.</strong> Editing an ExerciseEntry after partial routine completion has no policy. Minimum: trigger routine regeneration and warn when already-completed steps may be affected.</li>
+          <li><strong>Unchecking a completed step.</strong> Does unchecking a RoutineStepLog row decrement the medicated-wash count? Must be defined or max-2 enforcement is a soft suggestion, not a hard cap.</li>
+          <li><strong>Abbreviation ambiguity.</strong> BP = benzoyl peroxide. PIH = post-inflammatory hyperpigmentation. These must be expanded in code comments before the first implementation PR.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="verdict-section">
+      <h3 class="recommendation" style="padding-left:0;border:none;">📋 The Recommendation</h3>
+      <div class="recommendation">
+        <p>Build it — but resolve six things before writing a line of code:</p>
+        <ul>
+          <li><strong>Decide: chat panel with Groq, or sweat intensity field added to ExerciseModule.</strong> If chat panel, manual fallback is mandatory.</li>
+          <li><strong>Define ExerciseEntry deduplication policy.</strong> New row or annotate existing? Decide before touching schema.</li>
+          <li><strong>Make POST idempotent.</strong> Content hash or timestamp window before rule engine is wired.</li>
+          <li><strong>Specify rollback on Groq failure.</strong> No DB write until valid enum-validated intensity is returned.</li>
+          <li><strong>Resolve "skip medicated" vs "highest sweat wins" conflict.</strong> Write explicit precedence as a code comment before implementing.</li>
+          <li><strong>Define unchecking behavior.</strong> Does unchecking decrement the medicated-wash count?</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="one-thing">
+      <h3>The One Thing to Do First</h3>
+      <p>Write a single comment block at the top of the Python rule engine defining: what BP and PIH mean, the explicit precedence of "skip medicated" vs "highest sweat wins" for a mixed-intensity day, and the rollback policy on Groq failure. Until that exists as a written decision, no implementation code should be merged — because the code will make those decisions implicitly and incorrectly.</p>
+    </div>
+  </div>
+
+  <!-- ALIGNMENT GRID -->
+  <div class="alignment-grid">
+    <h2>Advisor Alignment Overview</h2>
+    <table class="grid-table">
+      <thead>
+        <tr>
+          <th>Topic</th>
+          <th>Contrarian</th>
+          <th>First Principles</th>
+          <th>Expansionist</th>
+          <th>Outsider</th>
+          <th>Executor</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Architecture is sound</td>
+          <td><span class="dot-agree"></span> Yes</td>
+          <td><span class="dot-caution"></span> Partial</td>
+          <td><span class="dot-agree"></span> Yes</td>
+          <td><span class="dot-neutral"></span> N/A</td>
+          <td><span class="dot-agree"></span> Yes</td>
+        </tr>
+        <tr>
+          <td>Groq fallback required</td>
+          <td><span class="dot-agree"></span> Critical</td>
+          <td><span class="dot-caution"></span> Implied</td>
+          <td><span class="dot-neutral"></span> Not raised</td>
+          <td><span class="dot-agree"></span> Critical</td>
+          <td><span class="dot-agree"></span> Critical</td>
+        </tr>
+        <tr>
+          <td>Chat panel vs radio buttons</td>
+          <td><span class="dot-caution"></span> Skeptical</td>
+          <td><span class="dot-caution"></span> Use buttons</td>
+          <td><span class="dot-expand"></span> Expand more</td>
+          <td><span class="dot-neutral"></span> Not raised</td>
+          <td><span class="dot-agree"></span> Build it</td>
+        </tr>
+        <tr>
+          <td>Sweat level re-derive each time</td>
+          <td><span class="dot-agree"></span> Yes</td>
+          <td><span class="dot-neutral"></span> N/A</td>
+          <td><span class="dot-neutral"></span> N/A</td>
+          <td><span class="dot-neutral"></span> N/A</td>
+          <td><span class="dot-agree"></span> Yes</td>
+        </tr>
+        <tr>
+          <td>Scope expansion</td>
+          <td><span class="dot-caution"></span> No</td>
+          <td><span class="dot-caution"></span> No</td>
+          <td><span class="dot-expand"></span> Yes, more</td>
+          <td><span class="dot-caution"></span> No</td>
+          <td><span class="dot-caution"></span> No</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="legend">
+      <div class="legend-item"><span class="dot-agree"></span> Aligned / In favor</div>
+      <div class="legend-item"><span class="dot-caution"></span> Skeptical / Flagged risk</div>
+      <div class="legend-item"><span class="dot-expand"></span> Expand scope</div>
+      <div class="legend-item"><span class="dot-neutral"></span> Not addressed</div>
+    </div>
+  </div>
+
+  <!-- ADVISOR RESPONSES -->
+  <div class="collapsibles">
+    <h2>Advisor Responses (click to expand)</h2>
+
+    <details>
+      <summary><span class="advisor-tag tag-contrarian">Contrarian</span></summary>
+      <div class="advisor-body">
+        <p>The design has a quiet failure mode nobody's naming: sweat intensity extraction via Groq/Llama is the wrong tool for the job, and it will fail in ways that silently corrupt the skincare routine.</p>
+        <p>"High cardio" vs "high strength" is a two-dimensional classification problem that could be solved with a lookup table in 20 lines of Python. Instead, you're making a network call to an external LLM service for something that has 9 possible outputs (3 intensity levels × 3 workout types). When Groq is down, rate-limited, or returns a malformed response, what happens? None of this is specified, and every option has a clinical consequence.</p>
+        <p>"Highest sweat wins" multi-workout rule sounds simple but isn't. If user logs morning yoga (low) and then evening HIIT (high), HIIT correctly overrides. But what if they log them out of order? What if they edit the first entry? The rule engine needs to re-derive sweat level from current ExerciseEntry rows on every routine generation — not cache it, not assume insertion order.</p>
+        <p>Max-2-medicated enforcement against already-checked RoutineStepLog rows is the right instinct, but "already DONE" assumes check timestamp is reliable. Users backfill logs. A step checked at 11pm for "this morning" shouldn't prevent an afternoon wash recommendation.</p>
+        <p>Three separate timing/ordering bugs in one design. Fix edge cases before writing a line of code.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary><span class="advisor-tag tag-firstprinciples">First Principles Thinker</span></summary>
+      <div class="advisor-body">
+        <p>What are we actually trying to solve? The user wants to treat active breakouts and fade PIH. The skincare routine needs to adapt to workout sweat. That's it.</p>
+        <p>Strip the assumptions. The actual problem is: "did the user sweat a lot today, and when?" That doesn't need a chat panel. It doesn't need Llama. It needs three radio buttons: Low / Medium / High. The user already knows their sweat level. They lived it. Making them type natural language that gets parsed into exactly those three values is pure overhead with a failure mode.</p>
+        <p>The deeper assumption to challenge: is within-day step completion memory the right model? The rule "max 2 medicated washes" is a daily constraint, not a real-time enforcement problem.</p>
+        <p>The failsafe framing is the tell. If you're building a chat panel as a "failsafe alongside the existing ExerciseModule," you're patching an integration gap, not solving a real user need. The right question: Why doesn't the ExerciseModule already surface sweat intensity to the skincare engine? Fix that integration. Everything else is architectural complexity compensating for a missing data field.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary><span class="advisor-tag tag-expansionist">Expansionist</span></summary>
+      <div class="advisor-body">
+        <p>The design is technically sound but thinking too small. You're building a skincare-aware workout logger when you're actually building a real-time physiological state machine — and you're not capitalizing on that.</p>
+        <p>The sweat intensity extraction is the sleeper feature. Once you're capturing workout type + intensity + time-of-day as structured data, you have inputs for a predictive routine generator that pre-stages tomorrow's routine tonight.</p>
+        <p>The "highest sweat wins" is conservative. Consider time-weighted accumulation: two medium-intensity workouts in one day likely exceed one high-intensity session's cumulative skin stress. That changes the medicated wash ceiling logic meaningfully.</p>
+        <p>The bigger miss: this NLP panel is a general-purpose health input mechanism. The same Groq pipeline could parse "bad breakout on left cheek" or "forgot sunscreen today" — turning the skincare tab into a journal-style health state ingestion layer. Build the chat panel, but architect it as a general event ingestion endpoint from day one.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary><span class="advisor-tag tag-outsider">Outsider</span> &nbsp;<em style="font-size:12px;font-weight:400;color:#888">— Strongest per peer review (5/5)</em></summary>
+      <div class="advisor-body">
+        <p>The spec assumes I know what PIH is. That acronym appears once with no expansion. "high+cardio→BP wash first" — what is BP? Benzoyl peroxide? Never stated. The rule engine is supposedly deterministic, but the spec uses abbreviations that make rules ambiguous to anyone implementing them cold.</p>
+        <p>"low→skip medicated entirely." Skip for the session? Skip for the day? If user logs a low-intensity morning walk and then a high-intensity evening run, does the morning "skip" get overridden? The spec says "highest sweat wins" for multi-workout, but doesn't reconcile this with the "skip" directive.</p>
+        <p>"Within-day step completion memory" — what happens if a user unchecks a step? Does the completed count go down? Can they trigger a third medicated wash that the system already decided against?</p>
+        <p>What happens if Groq is down? The spec says this is a "failsafe," but if NLP extraction fails silently, the rule engine falls back to... what? That fallback state needs to be explicit before any code is written.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary><span class="advisor-tag tag-executor">Executor</span></summary>
+      <div class="advisor-body">
+        <p>The design is buildable. Here's the Monday morning execution path:</p>
+        <p>1. Flask endpoint POST /api/skincare/workout-chat — accepts free text, calls Groq/Llama, returns structured {type, duration, sweat_intensity}, writes an ExerciseEntry row. One endpoint.<br>
+        2. Modify the rule engine to query RoutineStepLog for already-completed steps. Add MAX_MEDICATED_WASHES = 2 constant.<br>
+        3. Multi-workout: fetch-all WHERE date = today, then max(sweat_intensity). Five lines.<br>
+        4. React panel: text input + submit. On submit, POST + re-fetch routine.</p>
+        <p>One real risk: Groq call is a network dependency. Add fallback UI where user manually picks low/medium/high if LLM call fails. The deterministic rules downstream don't care how sweat intensity was determined — they just need the value. Build endpoint first. Test rules second. Wire React last.</p>
+      </div>
+    </details>
+  </div>
+
+  <!-- PEER REVIEWS -->
+  <div class="collapsibles">
+    <h2>Peer Review Highlights</h2>
+    <details>
+      <summary>All 5 reviewers — Strongest &amp; Blind Spots</summary>
+      <div class="review-body">
+        <p class="review-q">Strongest response (unanimous):</p>
+        <p class="review-a"><strong>The Outsider (Response B)</strong> — all 5 reviewers agreed. It is the only response that catches concrete specification gaps before code is written: undefined clinical abbreviations (BP, PIH), ambiguous scope of "skip medicated" vs multi-workout accumulation, unspecified Groq fallback state, and unchecking edge case.</p>
+
+        <p class="review-q">Biggest blind spot (unanimous):</p>
+        <p class="review-a"><strong>The Expansionist (Response E)</strong> — all 5 reviewers agreed. Treating this personal SQLite tracker as a scalable health platform and advocating time-weighted accumulation is scope creep on a spec that has unresolved pre-build blockers. Vision without foundation amplifies failure modes.</p>
+
+        <p class="review-q">What all five missed — caught in peer review:</p>
+        <ul class="review-a">
+          <li><strong>POST idempotency:</strong> double-tap creates duplicate ExerciseEntry rows, corrupting multi-workout accumulation</li>
+          <li><strong>ExerciseModule + chat panel data ownership conflict:</strong> same session logged via both routes = two rows for one workout</li>
+          <li><strong>Groq failure rollback:</strong> ExerciseEntry must not be written until valid intensity is returned and enum-validated</li>
+          <li><strong>ExerciseEntry edit/delete after partial completion:</strong> RoutineStepLog has checked steps at original sweat level — no policy for this conflict</li>
+          <li><strong>Flask-boundary input sanitization:</strong> if Groq hallucinates an intensity value, server-side enum check must block the DB write</li>
+        </ul>
+      </div>
+    </details>
+  </div>
+
+  <div class="footer">
+    LLM Council · 2026-05-25 · Workout Chat Panel for Skincare Module · life-tracker-zach.fly.dev
+  </div>
+</div>
+</body>
+</html>

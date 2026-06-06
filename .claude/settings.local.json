@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install *)",
+      "Bash(python -c ' *)",
+      "Bash(pip show *)",
+      "Bash(npm run *)",
+      "WebSearch",
+      "PowerShell(Set-Location \"C:\\\\Users\\\\zacha\\\\OneDrive\\\\Documents\\\\Patriot Infromation Tech\\\\ClosureNotes\\\\ClosureNotes\\\\server\"; Start-Process -WindowStyle Hidden -FilePath \"cmd\" -ArgumentList \"/c\",\"venv\\\\Scripts\\\\activate.bat && python app.py > flask.log 2>&1\"; Start-Sleep -Seconds 8; try { $h = Invoke-RestMethod -Uri \"http://localhost:5001/healthz\" -TimeoutSec 5; Write-Output \"Flask up: $\\($h.status\\)\" } catch { Write-Output \"Flask not responding yet: $_\" })",
+      "PowerShell(& \"C:\\\\Users\\\\zacha\\\\AppData\\\\Local\\\\Programs\\\\Ollama\\\\ollama.exe\" pull qwen2.5:3b)",
+      "PowerShell(Get-Process -Name python -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Seconds 2; Set-Location \"C:\\\\Users\\\\zacha\\\\OneDrive\\\\Documents\\\\Patriot Infromation Tech\\\\ClosureNotes\\\\ClosureNotes\\\\server\"; Start-Process -WindowStyle Hidden -FilePath \"cmd\" -ArgumentList \"/c\",\"venv\\\\Scripts\\\\activate.bat && python app.py > flask.log 2>&1\"; Start-Sleep -Seconds 8; try { $h = Invoke-RestMethod -Uri \"http://localhost:5001/healthz\" -TimeoutSec 5; Write-Output \"Flask up\" } catch { Write-Output \"Flask FAIL: $_\"; Get-Content flask.log -Tail 30 })",
+      "PowerShell([System.Environment]::SetEnvironmentVariable\\(\"OLLAMA_CONTEXT_LENGTH\", \"4096\", \"User\"\\); Write-Output \"OLLAMA_CONTEXT_LENGTH set to 4096 in User env\")",
+      "Bash(/c/Users/zacha/AppData/Local/Programs/Ollama/ollama.exe list *)"
+    ]
+  }
+}

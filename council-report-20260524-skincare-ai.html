@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Council Report — Skincare AI Orchestration</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f9fa; color: #1a1a2e; font-size: 15px; line-height: 1.6; }
+  .header { background: #1a1a2e; color: white; padding: 32px 40px; }
+  .header h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .header .question { font-size: 13px; color: #94a3b8; max-width: 760px; margin-top: 10px; line-height: 1.5; }
+  .header .meta { font-size: 12px; color: #64748b; margin-top: 8px; }
+  .container { max-width: 900px; margin: 0 auto; padding: 32px 24px; }
+
+  /* Verdict card */
+  .verdict { background: white; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; margin-bottom: 24px; }
+  .verdict-header { background: #0f172a; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 10px; }
+  .verdict-header h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
+  .verdict-body { padding: 0; }
+  .verdict-section { padding: 20px 24px; border-bottom: 1px solid #f1f5f9; }
+  .verdict-section:last-child { border-bottom: none; }
+  .verdict-section h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .verdict-section h3.agrees { color: #0d6e4f; }
+  .verdict-section h3.clashes { color: #92400e; }
+  .verdict-section h3.blindspots { color: #1e40af; }
+  .verdict-section h3.recommendation { color: #581c87; }
+  .verdict-section h3.first-thing { color: #be123c; }
+  .verdict-section p { color: #374151; margin-bottom: 10px; font-size: 14px; }
+  .verdict-section p:last-child { margin-bottom: 0; }
+  .verdict-section strong { color: #111827; }
+
+  /* One thing banner */
+  .one-thing { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: white; border-radius: 10px; padding: 20px 24px; margin-bottom: 24px; }
+  .one-thing .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; margin-bottom: 8px; }
+  .one-thing p { font-size: 14px; color: #e2e8f0; line-height: 1.6; }
+
+  /* Agreement grid */
+  .agreement-grid { background: white; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); padding: 20px 24px; margin-bottom: 24px; }
+  .agreement-grid h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.07em; color: #6b7280; margin-bottom: 16px; }
+  .advisor-row { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f1f5f9; }
+  .advisor-row:last-child { border-bottom: none; }
+  .advisor-name { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; min-width: 110px; padding-top: 2px; }
+  .advisor-name.contrarian { color: #dc2626; }
+  .advisor-name.firstprinciples { color: #7c3aed; }
+  .advisor-name.expansionist { color: #059669; }
+  .advisor-name.outsider { color: #d97706; }
+  .advisor-name.executor { color: #2563eb; }
+  .advisor-stance { display: flex; gap: 6px; flex-wrap: wrap; }
+  .stance-tag { font-size: 11px; padding: 3px 8px; border-radius: 10px; }
+  .tag-risk { background: #fee2e2; color: #991b1b; }
+  .tag-arch { background: #ede9fe; color: #5b21b6; }
+  .tag-feature { background: #d1fae5; color: #065f46; }
+  .tag-ux { background: #fef3c7; color: #92400e; }
+  .tag-build { background: #dbeafe; color: #1e40af; }
+  .tag-warn { background: #fce7f3; color: #9d174d; }
+
+  /* Collapsible sections */
+  .collapsible { background: white; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 12px; overflow: hidden; }
+  .collapsible-header { padding: 16px 20px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none; transition: background 0.15s; }
+  .collapsible-header:hover { background: #f8f9fa; }
+  .collapsible-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+  .collapsible-arrow { color: #9ca3af; font-size: 12px; transition: transform 0.2s; }
+  .collapsible-arrow.open { transform: rotate(180deg); }
+  .collapsible-body { display: none; padding: 0 20px 20px; border-top: 1px solid #f1f5f9; }
+  .collapsible-body.open { display: block; }
+  .advisor-response { font-size: 13px; color: #374151; line-height: 1.65; padding-top: 16px; }
+  .peer-review-item { margin-bottom: 16px; padding: 12px; background: #f8f9fa; border-radius: 8px; font-size: 13px; color: #374151; }
+  .peer-review-item strong { color: #111827; }
+
+  .section-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #9ca3af; margin: 24px 0 12px; font-weight: 600; }
+  .color-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .dot-contrarian { background: #dc2626; }
+  .dot-firstprinciples { background: #7c3aed; }
+  .dot-expansionist { background: #059669; }
+  .dot-outsider { background: #d97706; }
+  .dot-executor { background: #2563eb; }
+
+  .blindspot-item { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-size: 13px; color: #374151; }
+  .blindspot-item:last-child { border-bottom: none; }
+  .blindspot-icon { font-size: 16px; flex-shrink: 0; }
+
+  footer { text-align: center; padding: 24px; font-size: 12px; color: #9ca3af; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Council Report — Skincare AI Orchestration</h1>
+  <div class="question">
+    <strong>Question:</strong> Is a photo-based product scanner + AI-orchestrated daily skincare routine (replacing the manual AM/PM checklist) a sound design for a personal health tracker? Stack: React + Flask + SQLite on Fly.io, Claude Sonnet 4.6. Clinical goal: treat active breakouts + fade PIH.
+  </div>
+  <div class="meta">5 advisors · 5 peer reviews · Chairman synthesis · 2026-05-24</div>
+</div>
+
+<div class="container">
+
+  <!-- ONE THING FIRST -->
+  <div class="one-thing">
+    <div class="label">The One Thing to Do First</div>
+    <p>Open <code>fly.toml</code> and <code>backend/models.py</code> simultaneously and confirm two things: (1) a persistent volume is mounted so the SQLite database survives redeployment, and (2) the workout log table has a time-of-day field. If either is missing, fix it before writing a single line of skincare feature code — the routine engine's primary input and its entire data persistence model both depend on what you find there.</p>
+  </div>
+
+  <!-- CHAIRMAN VERDICT -->
+  <div class="verdict">
+    <div class="verdict-header">
+      <span>⚖️</span>
+      <h2>Chairman's Verdict</h2>
+    </div>
+    <div class="verdict-body">
+
+      <div class="verdict-section">
+        <h3 class="agrees">✅ Where the Council Agrees</h3>
+        <p><strong>The photo-to-ingredient pipeline is the load-bearing failure point.</strong> Every advisor flagged it: Claude vision will misclassify ingredients, and every downstream rule runs on that classification. A wrong read doesn't produce a suboptimal recommendation — it produces a confidently wrong one.</p>
+        <p><strong>Hardcoded rules must not live inside LLM prompts.</strong> "Max 2 medicated washes/24h" is a deterministic constraint, not a reasoning task. Putting it in a prompt means it is re-interpreted on every call, subject to hallucination, and untestable. These belong in Python logic, with Claude handling explanation only.</p>
+        <p><strong>Medical adjacency requires a persistent disclaimer.</strong> The routine engine issues guidance for active breakouts and PIH — that's clinical territory. A one-time modal is not sufficient. The disclaimer must live in the routine UI itself, every time the routine is displayed.</p>
+        <p><strong>The feedback loop is absent and it matters.</strong> Without tracking whether recommendations are helping or hurting, the system is an open loop. For a clinical goal, the user has no signal if the app makes things worse.</p>
+      </div>
+
+      <div class="verdict-section">
+        <h3 class="clashes">⚡ Where the Council Clashes</h3>
+        <p><strong>LLM for routine generation — yes or no?</strong> The First Principles advisor says cut it entirely (50-line decision function). The Executor treats LLM involvement as reasonable with guardrails. The Expansionist wants more LLM, not less.</p>
+        <p>The correct read: both are partially right. The <em>decision tree</em> (wash order, product selection, timing rules) should be deterministic Python. The LLM's role is legitimate but narrower: product identification at ingest, natural-language explanation, interaction warnings. Route the LLM around safety-critical logic, not through it.</p>
+        <p><strong>Outcome tracking — build now or later?</strong> The Expansionist argues for a closed-loop feedback system from day one. Peer reviews push back: building a feedback loop on unreliable ingredient data and missing checklist persistence means optimizing noise. Correct answer: fix the foundation first, then instrument the feedback loop. The destination is right; the prerequisites are wrong.</p>
+      </div>
+
+      <div class="verdict-section">
+        <h3 class="blindspots">🔍 Blind Spots the Council Caught</h3>
+        <div class="blindspot-item"><div class="blindspot-icon">🚨</div><div><strong>Fly.io SQLite volumes are ephemeral by default.</strong> Without an explicit persistent volume mount in fly.toml, every redeployment wipes the product inventory. The routine engine then silently fails — not with an error, but by generating routines against an empty product table. Highest-severity infrastructure risk in the design.</div></div>
+        <div class="blindspot-item"><div class="blindspot-icon">🔄</div><div><strong>Routine idempotency is unresolved.</strong> If a user checks off steps, closes the app, and reopens — does Claude regenerate a potentially different routine or restore the saved one? For a clinical compliance goal, regeneration-on-open silently corrupts adherence tracking. Routine must be generated once per day, persisted, and restored on reload.</div></div>
+        <div class="blindspot-item"><div class="blindspot-icon">💡</div><div><strong>Claude vision must run at ingest time only, never at display time.</strong> Re-scanning stored image blobs on every page load multiplies costs and stalls UX. Scan once on upload, store structured results, render from structured data thereafter.</div></div>
+        <div class="blindspot-item"><div class="blindspot-icon">⏰</div><div><strong>Workout log time-of-day field may not exist.</strong> The rule "post-cardio → BP wash first" requires knowing when today's workout happened relative to now. The log likely stores date, not time-of-day. If absent, the primary routine-personalization trigger cannot be evaluated.</div></div>
+        <div class="blindspot-item"><div class="blindspot-icon">📉</div><div><strong>Token cost and latency scaling.</strong> Sending the full product inventory + workout log + all rules on every request means latency and cost grow with inventory size. A pre-filter step — selecting relevant products before the Claude call — is necessary architecture nobody proposed.</div></div>
+        <div class="blindspot-item"><div class="blindspot-icon">⚡</div><div><strong>LLM availability is a daily UX dependency.</strong> This checklist runs every morning. If Claude is slow, rate-limited, or down, the user gets nothing. Pre-generate the routine on workout log save (not routine open), with a deterministic fallback for the failure case.</div></div>
+      </div>
+
+      <div class="verdict-section">
+        <h3 class="recommendation">🎯 The Recommendation</h3>
+        <p><strong>Build this</strong> — the concept is sound and the clinical goal is achievable — but restructure the architecture before writing feature code. Three distinct layers:</p>
+        <p><strong>Layer 1 — Ingest (LLM-assisted, runs once):</strong> User photographs product → Claude vision extracts brand, type, and active ingredients → structured data written to SQLite. Image blob stored, never re-scanned. Low-confidence scans surface a manual entry fallback — not a hidden confidence score.</p>
+        <p><strong>Layer 2 — Routine generation (deterministic Python, runs once per day):</strong> A Python function reads today's workout log (type + time-of-day), queries structured product inventory, and runs the rule set as explicit conditional logic. Output is persisted to a <code>daily_routines</code> table with a date key. Claude is called once, after the decision tree runs, to produce a natural-language explanation. Not to generate the routine itself.</p>
+        <p><strong>Layer 3 — Rendering (no LLM, idempotent):</strong> The routine UI reads from <code>daily_routines</code> for today's date. If a routine exists, render it and restore checklist state. If not, trigger generation. No LLM calls at render time.</p>
+        <p>Defer the outcome-tracking feedback loop until the foundation is stable and checklist completion data has been accumulating for at least two weeks. Add a persistent, non-dismissible disclaimer in the routine UI header: <em>"Suggestions based on general dermatological patterns. Consult a dermatologist for your specific condition."</em></p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ADVISOR POSITIONS GRID -->
+  <div class="agreement-grid">
+    <h3>Advisor Positions at a Glance</h3>
+    <div class="advisor-row">
+      <div class="advisor-name contrarian"><span class="color-dot dot-contrarian"></span> Contrarian</div>
+      <div class="advisor-stance">
+        <span class="stance-tag tag-risk">Liability gap</span>
+        <span class="stance-tag tag-risk">Ingredient misclassification</span>
+        <span class="stance-tag tag-risk">No interaction layer</span>
+        <span class="stance-tag tag-warn">Disclaimer required</span>
+      </div>
+    </div>
+    <div class="advisor-row">
+      <div class="advisor-name firstprinciples"><span class="color-dot dot-firstprinciples"></span> First Principles</div>
+      <div class="advisor-stance">
+        <span class="stance-tag tag-arch">Wrong layer for LLM</span>
+        <span class="stance-tag tag-arch">Deterministic rules in code</span>
+        <span class="stance-tag tag-arch">Structured ingredient data</span>
+      </div>
+    </div>
+    <div class="advisor-row">
+      <div class="advisor-name expansionist"><span class="color-dot dot-expansionist"></span> Expansionist</div>
+      <div class="advisor-stance">
+        <span class="stance-tag tag-feature">Outcome tracking loop</span>
+        <span class="stance-tag tag-feature">Conflict detection</span>
+        <span class="stance-tag tag-feature">Compliance analytics</span>
+      </div>
+    </div>
+    <div class="advisor-row">
+      <div class="advisor-name outsider"><span class="color-dot dot-outsider"></span> Outsider</div>
+      <div class="advisor-stance">
+        <span class="stance-tag tag-ux">Photo quality fallback</span>
+        <span class="stance-tag tag-ux">Rules not universal</span>
+        <span class="stance-tag tag-ux">Persistent disclaimer</span>
+        <span class="stance-tag tag-risk">SQLite blob privacy</span>
+      </div>
+    </div>
+    <div class="advisor-row">
+      <div class="advisor-name executor"><span class="color-dot dot-executor"></span> Executor</div>
+      <div class="advisor-stance">
+        <span class="stance-tag tag-build">Check time-of-day schema</span>
+        <span class="stance-tag tag-build">CV fallback needed</span>
+        <span class="stance-tag tag-build">Persist checklist state</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- FULL ADVISOR RESPONSES -->
+  <div class="section-label">Full Advisor Responses</div>
+
+  <div class="collapsible">
+    <div class="collapsible-header" onclick="toggle(this)">
+      <div class="collapsible-title"><span class="color-dot dot-contrarian"></span> The Contrarian</div>
+      <div class="collapsible-arrow">▼</div>
+    </div>
+    <div class="collapsible-body">
+      <div class="advisor-response">
+        The fatal flaw is the liability/safety gap dressed up as a feature. You're building a medical recommendation system while calling it a "routine generator." Those hardcoded dermatological rules aren't just UX decisions — they're clinical guidance. "Post-cardio BP wash first" and "max 2 medicated washes/24h" are the kind of instructions a dermatologist gives, not an app. When Claude misidentifies an active ingredient (and it will — skincare label photography is notoriously ambiguous, with overlapping terminology like "salicylic acid" vs "sodium salicylate" vs "willow bark extract"), the system confidently recommends something that could actively worsen active breakouts or cause chemical burns in combination.
+        <br><br>
+        Three specific failure modes: (1) Ingredient misclassification — Claude vision will hallucinate or misread small-print INCI lists under poor lighting. Database gets corrupted with wrong flags, and the routine engine silently makes bad decisions downstream. (2) Interaction blindness — the rules handle washing sequence but completely ignore dangerous combinations (retinoids + vitamin C, benzoyl peroxide + AHAs). No ingredient-interaction layer. For someone treating active breakouts, this isn't theoretical risk. (3) No feedback loop — zero mechanism to learn recommendations are making things worse.
+        <br><br>
+        Add explicit "this is not medical advice" guardrails with forced acknowledgment. Letting Claude read a workout log and prescribe a medicated wash sequence for someone with active breakouts is one bad recommendation away from a real skin barrier failure.
+      </div>
+    </div>
+  </div>
+
+  <div class="collapsible">
+    <div class="collapsible-header" onclick="toggle(this)">
+      <div class="collapsible-title"><span class="color-dot dot-firstprinciples"></span> The First Principles Thinker</div>
+      <div class="collapsible-arrow">▼</div>
+    </div>
+    <div class="collapsible-body">
+      <div class="advisor-response">
+        The framing conflates two distinct problems with different optimal solutions. Problem 1: Product knowledge capture. The user wants to know what's in their products. This is a solved problem — a lookup against an ingredient database (INCI decoder, CosDNA) is more accurate than Claude vision guessing from a photo. The photo-to-ingredient pipeline introduces hallucination risk on exactly the data that drives the safety rules downstream. A bad ingredient read corrupts everything after it.
+        <br><br>
+        Problem 2: Routine sequencing. The hardcoded dermatological rules are doing real work — but they're hardcoded in a prompt, not in code. That's the wrong layer. Rules like "max 2 medicated washes/24h" should be enforced in deterministic logic, not inferred by an LLM each time. The routine decision tree is ~5 variables (time of day, workout type, sweat level, active ingredients on hand, UV). This is a 50-line decision function, not an LLM problem. The LLM adds latency, cost, and non-determinism to something that should be fast and predictable.
+        <br><br>
+        Use deterministic logic for routine generation. Use Claude only for product identification (ingredient extraction) and user-facing explanation ("why this order today"). Store ingredients as structured data, not a blob. Then the clinical rules are testable, auditable, and don't drift.
+      </div>
+    </div>
+  </div>
+
+  <div class="collapsible">
+    <div class="collapsible-header" onclick="toggle(this)">
+      <div class="collapsible-title"><span class="color-dot dot-expansionist"></span> The Expansionist</div>
+      <div class="collapsible-arrow">▼</div>
+    </div>
+    <div class="collapsible-body">
+      <div class="advisor-response">
+        The design is sound but undershooting the opportunity significantly. You're building a context-aware dermatological AI that reads biometrics, inventory, and activity data to generate personalized protocols. The hardcoded rules are a floor, not a ceiling — Claude should reason dynamically from those principles, not just pattern-match against a lookup table. The real upside is adaptation over time.
+        <br><br>
+        What's missing: (1) Outcome tracking loop — add a weekly skin check-in (1-5 breakout severity + PIH improvement rating) and now Claude can correlate routine compliance + product combos + workout patterns against outcomes. That's a closed-loop optimization system. (2) Ingredient conflict detection across the full inventory — use extracted actives for cross-product interaction warnings, not just individual classification. (3) Streak/compliance analytics feeding into existing habit and mood modules already in the app.
+        <br><br>
+        The architecture is right. The SQLite photo blob + JSON routine + product inventory is a solid data foundation. Build the feedback loop from day one — retrofitting outcome tracking after months of data is painful.
+      </div>
+    </div>
+  </div>
+
+  <div class="collapsible">
+    <div class="collapsible-header" onclick="toggle(this)">
+      <div class="collapsible-title"><span class="color-dot dot-outsider"></span> The Outsider</div>
+      <div class="collapsible-arrow">▼</div>
+    </div>
+    <div class="collapsible-body">
+      <div class="advisor-response">
+        The design assumes users photograph products correctly, but people are bad at this. Blurry labels, angled shots, partial ingredient lists — Claude vision will confidently misidentify things. A BP wash misread as a gentle cleanser could mean someone applies benzoyl peroxide twice in quick succession. No fallback UI is shown for low-confidence scans.
+        <br><br>
+        The hardcoded rules are presented as universal. They aren't. "Post-cardio → BP wash first" ignores that BP degrades with sweat and UV, that some users cycle BP to avoid resistance, and that people with sensitive skin can't tolerate it daily regardless of workout type. The rules will be wrong for a meaningful slice of users, and users won't know they're wrong because the AI presents them with authority.
+        <br><br>
+        The photo blob in SQLite is a red flag: Fly.io SQLite with binary blobs doesn't scale and adds significant DB size over time. Those photos may contain prescription medications visible in the background. There's no mention of encryption or deletion policy.
+        <br><br>
+        Biggest concern: the system conflates routine suggestion with medical-adjacent advice. Needs a visible, persistent disclaimer — not a one-time modal, something present in the routine UI on every view.
+      </div>
+    </div>
+  </div>
+
+  <div class="collapsible">
+    <div class="collapsible-header" onclick="toggle(this)">
+      <div class="collapsible-title"><span class="color-dot dot-executor"></span> The Executor</div>
+      <div class="collapsible-arrow">▼</div>
+    </div>
+    <div class="collapsible-body">
+      <div class="advisor-response">
+        The design is buildable. Claude vision for product ID is solid — one endpoint, one day of work. Routine generation is one Flask route. Here's where you'll hit walls:
+        <br><br>
+        First wall — workout timing dependency. "Post-cardio → BP wash first" requires knowing when the workout happened relative to now. The workout log almost certainly stores date but maybe not time-of-day. Check backend/models.py before writing a line of routine logic.
+        <br><br>
+        Second wall — Claude vision will fail on partial labels, non-English packaging, store-brand products. You need a fallback: if confidence is low, prompt manual active ingredient entry. Without this, the product inventory becomes silently incomplete.
+        <br><br>
+        Third wall — "max 2 medicated washes/24h" requires knowing what was actually checked off on previous routine checklists, not just what was generated. If you're not persisting checklist completion state, this rule cannot be enforced.
+        <br><br>
+        First Monday morning action: Open backend/models.py. Confirm (1) workout log has time-of-day field, (2) there's a table for routine checklist completions. If either is missing, add the schema migrations first.
+      </div>
+    </div>
+  </div>
+
+  <!-- PEER REVIEW HIGHLIGHTS -->
+  <div class="section-label">Peer Review Highlights</div>
+  <div class="collapsible">
+    <div class="collapsible-header" onclick="toggle(this)">
+      <div class="collapsible-title">📋 Peer Review Summary (5 reviewers)</div>
+      <div class="collapsible-arrow">▼</div>
+    </div>
+    <div class="collapsible-body">
+      <div style="padding-top: 16px;">
+        <div class="peer-review-item"><strong>Strongest response (4/5 votes):</strong> The Executor — only response grounded in the actual codebase, identifying concrete implementation blockers before a line is written.</div>
+        <div class="peer-review-item"><strong>Biggest blind spot (4/5 votes):</strong> The Expansionist — advocates a closed-loop optimization system on an unreliable foundation. Building correlations on hallucinated ingredient data produces confident garbage.</div>
+        <div class="peer-review-item"><strong>Missed by all 5 — Fly.io ephemeral volumes:</strong> SQLite volumes are ephemeral by default on Fly.io. Without an explicit persistent volume mount, every redeployment wipes the product inventory. The routine engine breaks silently.</div>
+        <div class="peer-review-item"><strong>Missed by all 5 — Routine idempotency:</strong> Regenerating a different routine when the user reopens the app silently corrupts compliance tracking for a clinical goal. Must persist and restore.</div>
+        <div class="peer-review-item"><strong>Missed by all 5 — API availability as daily UX dependency:</strong> If Claude is down or slow, the user gets no morning routine. Pre-generate on workout log save; cache; deterministic fallback.</div>
+        <div class="peer-review-item"><strong>Missed by all 5 — Token cost scaling:</strong> Sending the full inventory + rules on every request means latency grows with inventory. A pre-filter step before the Claude call is necessary architecture.</div>
+        <div class="peer-review-item"><strong>Missed by all 5 — Vision at ingest vs display time:</strong> Running Claude vision at page render time (not upload time) multiplies API costs. Explicit architectural decision needed before building.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>Council session · 2026-05-24 · Skincare AI Orchestration · Life Tracker</footer>
+
+<script>
+function toggle(header) {
+  const body = header.nextElementSibling;
+  const arrow = header.querySelector('.collapsible-arrow');
+  body.classList.toggle('open');
+  arrow.classList.toggle('open');
+}
+</script>
+</body>
+</html>

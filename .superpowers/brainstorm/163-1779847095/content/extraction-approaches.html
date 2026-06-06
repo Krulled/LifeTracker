@@ -1,0 +1,44 @@
+<h2>How should nutrition data be extracted from the AI reply?</h2>
+<p class="subtitle">The chat endpoint currently returns plain text. We need structured data (food_name, calories, protein_g, carbs_g, fat_g) for the draft buttons.</p>
+
+<div class="options">
+
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Single LLM call — embedded JSON block (Recommended)</h3>
+      <p>Instruct the AI to append a machine-readable block at the end of its reply. Backend strips it, returns clean <code>reply</code> text + <code>drafts</code> array. One round-trip, no extra latency.</p>
+      <div class="pros-cons" style="margin-top:0.75rem">
+        <div class="pros"><h4>Pros</h4><ul><li>Single LLM call — same speed as today</li><li>No backend refactor needed</li><li>llama-3.1-8b follows structured output well when prompted</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Need robust parsing (regex) to strip JSON from reply</li><li>Occasional LLM formatting slips</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Two-phase — reply then extract</h3>
+      <p>First call generates the natural language reply as today. A second, tiny LLM call then extracts structured items from that text. Clean separation of concerns.</p>
+      <div class="pros-cons" style="margin-top:0.75rem">
+        <div class="pros"><h4>Pros</h4><ul><li>Reply is guaranteed clean text</li><li>Extraction prompt is small and focused</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>2× LLM calls → more latency per message</li><li>Added complexity in backend</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Frontend regex parsing — no backend changes</h3>
+      <p>Parse the plain text reply in the browser using regex patterns to find calorie/macro numbers. No backend changes at all.</p>
+      <div class="pros-cons" style="margin-top:0.75rem">
+        <div class="pros"><h4>Pros</h4><ul><li>Zero backend changes</li><li>Instant to ship</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Fragile — breaks on varied phrasing</li><li>Hard to reliably identify food name vs calorie numbers</li><li>Poor accuracy for multi-food replies</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:1.5rem">Approach A is recommended — single call, minimal latency, reliable enough with a clear prompt contract. Click to select or reply in terminal.</p>

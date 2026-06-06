@@ -1,0 +1,103 @@
+<h2>How should the scan feature branch between a food photo and a nutrition label?</h2>
+<p class="subtitle">Currently there's one "📷 Scan" button. We need to handle two very different inputs.</p>
+
+<div class="cards">
+
+  <!-- Option A -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:1rem;background:#0d1117;border-radius:8px;font-family:monospace;font-size:0.8rem">
+      <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.75rem">
+        <div style="background:#21262d;padding:4px 10px;border-radius:6px;color:#58a6ff;font-size:0.75rem">📷 Scan</div>
+        <div style="background:#21262d;padding:4px 10px;border-radius:6px;color:#8b949e;font-size:0.75rem">📋 Templates</div>
+      </div>
+      <!-- Modal preview -->
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:0.75rem">
+        <div style="color:#f0f6fc;font-size:0.8rem;margin-bottom:0.5rem">📷 Scan Food</div>
+        <div style="background:#0d1117;border:2px dashed #30363d;border-radius:6px;padding:1rem;text-align:center;color:#8b949e;font-size:0.72rem">
+          🍽️ / 📋<br>
+          <span style="font-size:0.65rem">Take any photo — AI detects type</span>
+        </div>
+        <div style="display:flex;gap:0.4rem;margin-top:0.5rem">
+          <div style="flex:1;background:#21262d;padding:4px;border-radius:4px;text-align:center;font-size:0.65rem;color:#8b949e">📁 Gallery</div>
+          <div style="flex:1;background:#21262d;padding:4px;border-radius:4px;text-align:center;font-size:0.65rem;color:#8b949e">📷 Camera</div>
+        </div>
+        <div style="background:#1f6feb33;border:1px solid #1f6feb;border-radius:4px;padding:4px 8px;margin-top:0.5rem;font-size:0.65rem;color:#58a6ff">
+          🤖 AI auto-detects: meal or nutrition label
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Auto-detect</h3>
+      <p>One "Scan" button. AI figures out if the photo is a plated meal or a nutrition label and branches the flow automatically.</p>
+      <div class="pros-cons" style="margin-top:0.5rem;font-size:0.8rem">
+        <div class="pros"><h4>Pros</h4><ul><li>Simplest UX — one button</li><li>Works even if user is unsure</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>AI might misclassify</li><li>Extra round-trip before branching</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Option B -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:1rem;background:#0d1117;border-radius:8px;font-family:monospace;font-size:0.8rem">
+      <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.75rem">
+        <div style="background:#21262d;padding:4px 10px;border-radius:6px;color:#58a6ff;font-size:0.75rem">📷 Scan Food</div>
+        <div style="background:#21262d;padding:4px 10px;border-radius:6px;color:#a5d6ff;font-size:0.75rem">🏷️ Scan Label</div>
+        <div style="background:#21262d;padding:4px 10px;border-radius:6px;color:#8b949e;font-size:0.75rem">📋 Templates</div>
+      </div>
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:0.75rem">
+        <div style="color:#f0f6fc;font-size:0.8rem;margin-bottom:0.5rem">🏷️ Scan Nutrition Label</div>
+        <div style="background:#0d1117;border:2px dashed #30363d;border-radius:6px;padding:1rem;text-align:center;color:#8b949e;font-size:0.72rem">
+          📋<br>
+          <span style="font-size:0.65rem">Photo the nutrition facts panel</span>
+        </div>
+        <div style="display:flex;gap:0.4rem;margin-top:0.5rem">
+          <div style="flex:1;background:#21262d;padding:4px;border-radius:4px;text-align:center;font-size:0.65rem;color:#8b949e">📁 Gallery</div>
+          <div style="flex:1;background:#21262d;padding:4px;border-radius:4px;text-align:center;font-size:0.65rem;color:#8b949e">📷 Camera</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Two buttons</h3>
+      <p>Add a separate "🏷️ Scan Label" button alongside the existing "📷 Scan Food". Each opens a dedicated modal with purpose-built UI.</p>
+      <div class="pros-cons" style="margin-top:0.5rem;font-size:0.8rem">
+        <div class="pros"><h4>Pros</h4><ul><li>Zero ambiguity — user declares intent</li><li>Cleaner per-mode prompts</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Two buttons to explain</li><li>Slightly more crowded toolbar</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Option C -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:1rem;background:#0d1117;border-radius:8px;font-family:monospace;font-size:0.8rem">
+      <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.75rem">
+        <div style="background:#21262d;padding:4px 10px;border-radius:6px;color:#58a6ff;font-size:0.75rem">📷 Scan</div>
+        <div style="background:#21262d;padding:4px 10px;border-radius:6px;color:#8b949e;font-size:0.75rem">📋 Templates</div>
+      </div>
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:0.75rem">
+        <div style="color:#f0f6fc;font-size:0.8rem;margin-bottom:0.5rem">📷 Scan Food</div>
+        <!-- Toggle inside modal -->
+        <div style="display:flex;gap:2px;background:#0d1117;border-radius:6px;padding:2px;margin-bottom:0.5rem">
+          <div style="flex:1;background:#21262d;padding:4px 8px;border-radius:4px;text-align:center;font-size:0.65rem;color:#f0f6fc">🍽️ Meal Photo</div>
+          <div style="flex:1;padding:4px 8px;border-radius:4px;text-align:center;font-size:0.65rem;color:#8b949e">🏷️ Nutrition Label</div>
+        </div>
+        <div style="background:#0d1117;border:2px dashed #30363d;border-radius:6px;padding:1rem;text-align:center;color:#8b949e;font-size:0.72rem">
+          🍽️<br>
+          <span style="font-size:0.65rem">Photo of your meal</span>
+        </div>
+        <div style="display:flex;gap:0.4rem;margin-top:0.5rem">
+          <div style="flex:1;background:#21262d;padding:4px;border-radius:4px;text-align:center;font-size:0.65rem;color:#8b949e">📁 Gallery</div>
+          <div style="flex:1;background:#21262d;padding:4px;border-radius:4px;text-align:center;font-size:0.65rem;color:#8b949e">📷 Camera</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Tab toggle inside modal</h3>
+      <p>One "Scan" button opens a modal with a "Meal Photo / Nutrition Label" tab toggle at the top. User switches mode before uploading.</p>
+      <div class="pros-cons" style="margin-top:0.5rem;font-size:0.8rem">
+        <div class="pros"><h4>Pros</h4><ul><li>One entry point, clear mode switch</li><li>UI stays compact on main screen</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>One extra tap vs. two dedicated buttons</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>

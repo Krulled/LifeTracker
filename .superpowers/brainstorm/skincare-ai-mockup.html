@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skincare AI Orchestration — Design Mockup</title>
+<style>
+  :root {
+    --bg-primary: #0d1117;
+    --bg-card: #161b22;
+    --bg-elevated: #1c2128;
+    --bg-input: #0d1117;
+    --border: #30363d;
+    --accent: #00d4aa;
+    --accent-dim: #00a884;
+    --accent-glow: rgba(0,212,170,0.15);
+    --text-primary: #e6edf3;
+    --text-dim: #8b949e;
+    --text-muted: #6e7681;
+    --danger: #f85149;
+    --warning: #f0a030;
+    --success: #3fb950;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ── Page chrome ── */
+  .page-header {
+    background: #090c10;
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .page-header h1 { font-size: 14px; color: var(--text-dim); font-weight: 400; }
+  .page-header span { color: var(--text-muted); }
+
+  .design-nav {
+    display: flex; gap: 0;
+    border-bottom: 2px solid var(--border);
+    background: var(--bg-card);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .design-nav button {
+    padding: 12px 20px; border: none; background: none;
+    color: var(--text-dim); cursor: pointer; font-size: 13px;
+    border-bottom: 2px solid transparent; margin-bottom: -2px;
+    transition: all 0.15s;
+  }
+  .design-nav button.active {
+    color: var(--accent); border-bottom-color: var(--accent);
+    background: var(--bg-elevated);
+  }
+  .design-nav button:hover:not(.active) { color: var(--text-primary); }
+
+  .section { display: none; }
+  .section.active { display: block; }
+
+  /* ── Layout annotation ── */
+  .annotation {
+    background: rgba(0,212,170,0.07);
+    border-left: 3px solid var(--accent);
+    padding: 10px 14px; margin: 12px 20px;
+    font-size: 12px; color: var(--text-dim);
+    border-radius: 0 4px 4px 0;
+  }
+  .annotation strong { color: var(--accent); }
+
+  /* ── Module shell (mimics the app's module wrapper) ── */
+  .module-shell {
+    max-width: 420px; margin: 16px auto; padding: 0 12px;
+  }
+  .module-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .module-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .module-title { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .module-subtitle { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+  /* ── Tabs (within a module) ── */
+  .mod-tabs {
+    display: flex; border-bottom: 1px solid var(--border);
+    background: var(--bg-primary);
+  }
+  .mod-tab {
+    flex: 1; padding: 9px 4px; font-size: 12px;
+    border: none; background: none; color: var(--text-dim); cursor: pointer;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    transition: all 0.15s;
+  }
+  .mod-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── Daily routine view ── */
+  .routine-section {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .routine-section:last-child { border-bottom: none; }
+  .routine-section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .routine-section-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--text-muted);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .section-badge {
+    font-size: 10px; padding: 2px 6px; border-radius: 10px;
+    background: var(--bg-elevated); color: var(--text-dim);
+  }
+  .section-badge.workout { background: rgba(240,160,48,0.15); color: var(--warning); }
+  .section-badge.skipped { background: var(--bg-elevated); color: var(--text-muted); opacity: 0.5; }
+
+  .step-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 8px; margin-bottom: 4px;
+    background: var(--bg-elevated); cursor: pointer;
+    transition: background 0.1s;
+  }
+  .step-row:hover { background: #232a35; }
+  .step-row.done { opacity: 0.6; }
+
+  .step-check {
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 2px solid var(--border); flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px;
+  }
+  .step-check.checked { background: var(--accent); border-color: var(--accent); color: #0d1117; }
+
+  .step-info { flex: 1; min-width: 0; }
+  .step-name { font-size: 13px; font-weight: 500; }
+  .step-product { font-size: 11px; color: var(--accent); margin-top: 1px; }
+  .step-why { font-size: 10px; color: var(--text-muted); margin-top: 2px; font-style: italic; }
+
+  .step-type-badge {
+    font-size: 10px; padding: 2px 6px; border-radius: 8px;
+    background: var(--bg-primary); color: var(--text-muted); flex-shrink: 0;
+  }
+
+  /* ── Generate button ── */
+  .generate-btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: calc(100% - 28px); margin: 10px 14px;
+    padding: 10px; border-radius: 8px;
+    background: var(--accent); color: #0d1117;
+    border: none; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  .generate-btn.secondary {
+    background: var(--bg-elevated); color: var(--text-dim);
+    border: 1px solid var(--border);
+  }
+  .ai-badge {
+    font-size: 10px; background: #0d1117; color: var(--accent);
+    padding: 2px 5px; border-radius: 4px;
+  }
+
+  /* ── Alerts ── */
+  .alerts-section { padding: 10px 14px; }
+  .alert-item {
+    display: flex; gap: 8px; align-items: flex-start;
+    padding: 7px 10px; border-radius: 6px; margin-bottom: 5px;
+    font-size: 11px; color: var(--text-dim);
+    background: var(--bg-elevated);
+  }
+  .alert-item.warn { border-left: 2px solid var(--warning); }
+  .alert-item.info { border-left: 2px solid var(--accent); }
+  .alert-item.ban { border-left: 2px solid var(--danger); }
+
+  /* ── Product inventory ── */
+  .product-grid { padding: 10px 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .product-card {
+    background: var(--bg-elevated); border-radius: 8px;
+    border: 1px solid var(--border); overflow: hidden;
+    cursor: pointer; transition: border-color 0.15s;
+  }
+  .product-card:hover { border-color: var(--accent); }
+  .product-photo {
+    width: 100%; aspect-ratio: 1;
+    background: linear-gradient(135deg, #1c2128 0%, #161b22 100%);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px;
+  }
+  .product-photo img { width: 100%; height: 100%; object-fit: cover; }
+  .product-info { padding: 8px; }
+  .product-brand { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+  .product-name { font-size: 11px; font-weight: 600; margin-top: 2px; line-height: 1.3; }
+  .product-type { font-size: 10px; color: var(--accent); margin-top: 4px; }
+  .product-ingredients { font-size: 9px; color: var(--text-muted); margin-top: 3px; line-height: 1.4; }
+  .product-status {
+    display: inline-block; font-size: 9px; margin-top: 4px;
+    padding: 2px 5px; border-radius: 4px;
+  }
+  .product-status.ok { background: rgba(63,185,80,0.15); color: var(--success); }
+  .product-status.banned { background: rgba(248,81,73,0.15); color: var(--danger); }
+
+  .scan-product-btn {
+    grid-column: 1/-1;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 10px; border-radius: 8px;
+    background: var(--bg-elevated); color: var(--accent);
+    border: 1px dashed var(--accent); cursor: pointer;
+    font-size: 12px; font-weight: 500;
+  }
+
+  /* ── Photo scan modal (simplified) ── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+    display: flex; align-items: flex-end; justify-content: center; z-index: 100;
+  }
+  .modal-sheet {
+    width: 100%; max-width: 420px;
+    background: var(--bg-card); border-radius: 16px 16px 0 0;
+    border-top: 1px solid var(--border);
+    padding: 20px 16px 32px;
+  }
+  .modal-handle { width: 36px; height: 4px; border-radius: 2px; background: var(--border); margin: 0 auto 16px; }
+  .modal-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .modal-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+  .photo-drop {
+    background: var(--bg-elevated); border: 2px dashed var(--border);
+    border-radius: 10px; padding: 32px; text-align: center;
+    color: var(--text-muted); font-size: 13px;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+  .photo-drop span { font-size: 32px; }
+
+  /* ── Scan review ── */
+  .review-field { margin-bottom: 10px; }
+  .review-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 4px; }
+  .review-value { font-size: 13px; font-weight: 500; }
+  .review-input {
+    width: 100%; background: var(--bg-input); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 10px; color: var(--text-primary);
+    font-size: 13px;
+  }
+  .ingredient-tag {
+    display: inline-block; font-size: 10px; padding: 3px 8px;
+    background: rgba(0,212,170,0.1); color: var(--accent);
+    border: 1px solid rgba(0,212,170,0.2); border-radius: 10px;
+    margin: 2px;
+  }
+  .ingredient-tag.warn {
+    background: rgba(240,160,48,0.1); color: var(--warning);
+    border-color: rgba(240,160,48,0.2);
+  }
+  .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+  .btn-primary {
+    flex: 1; padding: 10px; border-radius: 8px;
+    background: var(--accent); color: #0d1117;
+    border: none; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  .btn-ghost {
+    padding: 10px 16px; border-radius: 8px;
+    background: none; color: var(--text-dim);
+    border: 1px solid var(--border); cursor: pointer; font-size: 13px;
+  }
+
+  /* ── Option selector ── */
+  .option-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px 20px; }
+  .option-card {
+    border: 2px solid var(--border); border-radius: 10px;
+    padding: 12px; cursor: pointer; transition: all 0.15s;
+  }
+  .option-card:hover { border-color: var(--accent); background: var(--accent-glow); }
+  .option-card.selected { border-color: var(--accent); background: var(--accent-glow); }
+  .option-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); margin-bottom: 6px; }
+  .option-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .option-desc { font-size: 11px; color: var(--text-dim); line-height: 1.4; }
+
+  .full-mockup { padding: 0 20px 20px; }
+  .mockup-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-muted); padding: 14px 0 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .mockup-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .comparison-col { }
+  .comparison-col h4 { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; text-align: center; }
+
+  /* mini module preview */
+  .mini-module { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; font-size: 10px; }
+  .mini-header { background: var(--bg-card); padding: 6px 8px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 10px; }
+  .mini-tabs { display: flex; background: var(--bg-primary); border-bottom: 1px solid var(--border); }
+  .mini-tab { flex: 1; padding: 5px 2px; text-align: center; font-size: 9px; color: var(--text-muted); border-bottom: 2px solid transparent; }
+  .mini-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .mini-body { padding: 8px; background: var(--bg-card); }
+  .mini-row { display: flex; gap: 6px; align-items: center; padding: 4px 6px; background: var(--bg-elevated); border-radius: 4px; margin-bottom: 3px; font-size: 9px; }
+  .mini-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+  .mini-dot.done { background: var(--accent); }
+  .mini-product { width: 20px; height: 20px; border-radius: 4px; background: var(--bg-input); flex-shrink: 0; font-size: 10px; display: flex; align-items: center; justify-content: center; }
+  .mini-section-label { font-size: 8px; text-transform: uppercase; color: var(--text-muted); margin: 6px 0 3px; letter-spacing: 0.06em; }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>Life Tracker — Skincare AI Orchestration <span>/ Design Mockup</span></h1>
+</div>
+
+<div class="design-nav">
+  <button class="active" onclick="show('overview')">Overview</button>
+  <button onclick="show('layout-options')">Layout Options</button>
+  <button onclick="show('daily-routine')">Daily Routine</button>
+  <button onclick="show('product-scan')">Product Scan</button>
+  <button onclick="show('inventory')">Inventory View</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ OVERVIEW -->
+<div id="overview" class="section active">
+  <div class="annotation">
+    <strong>What's being built:</strong> Two interconnected features — (1) a photo-based product inventory scanner
+    that identifies ingredients and product type via AI, and (2) a daily routine orchestrator that uses your
+    workout log + active inventory to have Claude generate an optimized, safety-validated routine each day.
+  </div>
+
+  <div style="padding: 0 20px;">
+    <div class="mockup-label">System overview</div>
+    <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; font-size: 12px;">
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(0,212,170,0.15); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 18px;">📷</div>
+          <div>
+            <div style="font-weight: 600; margin-bottom: 2px;">Product Scanner</div>
+            <div style="color: var(--text-dim);">Photograph a product → Claude identifies brand, ingredients, type, interactions → saved to your inventory DB</div>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); padding: 0 8px;">
+          <div style="flex: 1; height: 1px; background: var(--border);"></div>
+          <div style="font-size: 10px;">feeds into</div>
+          <div style="flex: 1; height: 1px; background: var(--border);"></div>
+        </div>
+
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(0,212,170,0.15); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 18px;">🧴</div>
+          <div>
+            <div style="font-weight: 600; margin-bottom: 2px;">Product Inventory</div>
+            <div style="color: var(--text-dim);">Stored list of products you own, each with type, ingredients, and face-safe status</div>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); padding: 0 8px;">
+          <div style="flex: 1; height: 1px; background: var(--border);"></div>
+          <div style="font-size: 10px;">feeds into</div>
+          <div style="flex: 1; height: 1px; background: var(--border);"></div>
+        </div>
+
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(0,212,170,0.15); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 18px;">🤖</div>
+          <div>
+            <div style="font-weight: 600; margin-bottom: 2px;">AI Routine Orchestrator</div>
+            <div style="color: var(--text-dim);">Daily: pulls today's workout log + inventory → Claude applies dermatological rules → generates Morning / Post-Workout / Evening plan</div>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); padding: 0 8px;">
+          <div style="flex: 1; height: 1px; background: var(--border);"></div>
+          <div style="flex: 1; height: 1px; background: var(--border);"></div>
+        </div>
+
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(240,160,48,0.15); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 18px;">✅</div>
+          <div>
+            <div style="font-weight: 600; margin-bottom: 2px;">Interactive Checklist</div>
+            <div style="color: var(--text-dim);">Routine renders as tappable steps — check off each product as you use it. Logged to history.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="mockup-label">New database tables</div>
+    <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 12px; font-size: 11px; font-family: monospace;">
+      <div style="color: var(--accent); margin-bottom: 6px;">SkinProduct</div>
+      <div style="color: var(--text-dim); padding-left: 12px; line-height: 1.8;">
+        id, product_name, brand, product_type<br>
+        active_ingredients (text/JSON)<br>
+        face_safe (bool) — AI-assessed<br>
+        photo_b64 (blob) — original scan<br>
+        ai_summary (text)<br>
+        created_at
+      </div>
+      <div style="color: var(--accent); margin: 10px 0 6px;">SkinRoutineLog</div>
+      <div style="color: var(--text-dim); padding-left: 12px; line-height: 1.8;">
+        id, log_date, generated_json (text)<br>
+        generated_at — when Claude ran<br>
+        workout_context (text) — snapshot used
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ LAYOUT OPTIONS -->
+<div id="layout-options" class="section">
+  <div class="annotation">
+    <strong>Key decision:</strong> How does the AI routine fit into the existing SkinCare module?
+    The existing module has AM/PM step checklists, skin condition logging, streak tracking, and photo analysis.
+  </div>
+
+  <div class="option-grid">
+    <div class="option-card selected" id="opt-a" onclick="selectOption('a')">
+      <div class="option-label">Option A ★</div>
+      <div class="option-title">New tabs in SkinCare module</div>
+      <div class="option-desc">Add "AI Routine" + "Products" tabs. Keep existing AM/PM steps. User can use either mode.</div>
+    </div>
+    <div class="option-card" id="opt-b" onclick="selectOption('b')">
+      <div class="option-label">Option B</div>
+      <div class="option-title">Replace steps with AI</div>
+      <div class="option-desc">Remove manual steps. AI always generates the routine. Products tab added alongside.</div>
+    </div>
+  </div>
+
+  <div class="full-mockup">
+    <div class="mockup-label">Option A — new tabs (recommended)</div>
+    <div class="mini-module">
+      <div class="mini-header">🧴 Skincare</div>
+      <div class="mini-tabs">
+        <div class="mini-tab">AM Steps</div>
+        <div class="mini-tab">PM Steps</div>
+        <div class="mini-tab active" style="color: var(--accent);">✨ AI Routine</div>
+        <div class="mini-tab">Products</div>
+        <div class="mini-tab">History</div>
+      </div>
+      <div class="mini-body">
+        <div class="mini-section-label">Morning</div>
+        <div class="mini-row"><div class="mini-dot done"></div><div style="flex:1">Cleanser</div><div style="color:var(--accent);font-size:9px">CeraVe BHA Wash</div></div>
+        <div class="mini-row"><div class="mini-dot done"></div><div style="flex:1">Moisturize</div><div style="color:var(--accent);font-size:9px">Oil-Free Moist.</div></div>
+        <div class="mini-row"><div class="mini-dot"></div><div style="flex:1">SPF</div><div style="color:var(--accent);font-size:9px">Broad Spectrum</div></div>
+        <div class="mini-section-label">Post-Workout (cardio logged)</div>
+        <div class="mini-row"><div class="mini-dot"></div><div style="flex:1">BP Wash</div><div style="color:var(--warning);font-size:9px">Kills bacteria</div></div>
+        <div class="mini-section-label">Evening</div>
+        <div class="mini-row"><div class="mini-dot"></div><div style="flex:1">CeraVe BHA Wash</div><div style="color:var(--text-muted);font-size:9px">PM deep clean</div></div>
+        <div class="mini-row"><div class="mini-dot"></div><div style="flex:1">Moisturize</div><div style="color:var(--accent);font-size:9px">Oil-Free Moist.</div></div>
+      </div>
+    </div>
+
+    <div style="height: 12px;"></div>
+
+    <div class="mockup-label">Option B — AI replaces steps</div>
+    <div class="mini-module">
+      <div class="mini-header">🧴 Skincare</div>
+      <div class="mini-tabs">
+        <div class="mini-tab active" style="color: var(--accent);">✨ Today</div>
+        <div class="mini-tab">Products</div>
+        <div class="mini-tab">History</div>
+        <div class="mini-tab">Condition</div>
+      </div>
+      <div class="mini-body">
+        <div style="background: rgba(0,212,170,0.07); border-radius: 4px; padding: 6px 8px; margin-bottom: 6px; font-size: 9px; color: var(--text-dim);">
+          ✨ AI generated · Based on your 8am cardio run
+        </div>
+        <div class="mini-section-label">Morning</div>
+        <div class="mini-row"><div class="mini-dot done"></div><div style="flex:1">Rinse only</div><div style="color:var(--text-muted);font-size:9px">Pre-workout</div></div>
+        <div class="mini-section-label">Post-Workout</div>
+        <div class="mini-row"><div class="mini-dot"></div><div style="flex:1">BP Wash 5%</div><div style="color:var(--warning);font-size:9px">Sweat bacteria</div></div>
+        <div class="mini-row"><div class="mini-dot"></div><div style="flex:1">Moisturize + SPF</div><div style="color:var(--accent);font-size:9px"></div></div>
+        <div class="mini-section-label">Evening</div>
+        <div class="mini-row"><div class="mini-dot"></div><div style="flex:1">CeraVe BHA</div><div style="color:var(--text-muted);font-size:9px">Deep clean</div></div>
+        <div class="mini-row"><div class="mini-dot"></div><div style="flex:1">Moisturize</div><div style="color:var(--accent);font-size:9px"></div></div>
+      </div>
+    </div>
+
+    <div style="height: 10px;"></div>
+    <div style="background: rgba(240,160,48,0.07); border-left: 3px solid var(--warning); padding: 10px 12px; border-radius: 0 6px 6px 0; font-size: 11px; color: var(--text-dim);">
+      <strong style="color: var(--warning);">Note on Option B:</strong> Removing the manual step system means losing the user's existing logged history for those steps. Option A preserves both flows.
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ DAILY ROUTINE -->
+<div id="daily-routine" class="section">
+  <div class="annotation">
+    <strong>The core AI view.</strong> Claude reads today's workout log and your product inventory, then generates a structured routine. You check off steps as you go. The "why" shows the rule that drove the selection.
+  </div>
+
+  <div class="module-shell">
+    <div class="module-card">
+      <div class="module-header">
+        <div>
+          <div class="module-title">✨ Today's Routine</div>
+          <div class="module-subtitle">Sun · May 24 · Generated 7:02 AM</div>
+        </div>
+        <button class="generate-btn secondary" style="width:auto; margin:0; font-size:11px; padding: 5px 10px;">↻ Refresh</button>
+      </div>
+
+      <!-- Workout context banner -->
+      <div style="padding: 8px 14px; background: rgba(240,160,48,0.08); border-bottom: 1px solid rgba(240,160,48,0.2); display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 14px;">🏃</span>
+        <div style="font-size: 11px; color: var(--warning);">Cardio run logged · 8:00 AM · High sweat</div>
+      </div>
+
+      <!-- Morning section -->
+      <div class="routine-section">
+        <div class="routine-section-header">
+          <div class="routine-section-title">
+            🌅 Morning
+            <span class="section-badge">pre-workout</span>
+          </div>
+          <div style="font-size: 10px; color: var(--text-muted);">2/3 done</div>
+        </div>
+
+        <div class="step-row done">
+          <div class="step-check checked">✓</div>
+          <div class="step-info">
+            <div class="step-name">Water rinse</div>
+            <div class="step-why">Light rinse only — medicated wash saved for post-workout</div>
+          </div>
+          <div class="step-type-badge">cleanse</div>
+        </div>
+
+        <div class="step-row done">
+          <div class="step-check checked">✓</div>
+          <div class="step-info">
+            <div class="step-name">Moisturize</div>
+            <div class="step-product">Oil-Free Moisturizer · Niacinamide</div>
+          </div>
+          <div class="step-type-badge">hydrate</div>
+        </div>
+
+        <div class="step-row">
+          <div class="step-check"></div>
+          <div class="step-info">
+            <div class="step-name">SPF 30+</div>
+            <div class="step-product">Broad-Spectrum Sunscreen</div>
+            <div class="step-why">Required — UV darkens PIH</div>
+          </div>
+          <div class="step-type-badge">protect</div>
+        </div>
+      </div>
+
+      <!-- Post-workout section -->
+      <div class="routine-section">
+        <div class="routine-section-header">
+          <div class="routine-section-title">
+            💪 Post-Workout
+            <span class="section-badge workout">cardio rule active</span>
+          </div>
+          <div style="font-size: 10px; color: var(--text-muted);">0/2 done</div>
+        </div>
+
+        <div class="step-row">
+          <div class="step-check"></div>
+          <div class="step-info">
+            <div class="step-name">Benzoyl Peroxide Wash 5%</div>
+            <div class="step-product">Generic Rx/OTC · BP 5%</div>
+            <div class="step-why">Post-cardio rule: kills surface bacteria from sweat</div>
+          </div>
+          <div class="step-type-badge">cleanse</div>
+        </div>
+
+        <div class="step-row">
+          <div class="step-check"></div>
+          <div class="step-info">
+            <div class="step-name">Moisturize</div>
+            <div class="step-product">Oil-Free Moisturizer</div>
+          </div>
+          <div class="step-type-badge">hydrate</div>
+        </div>
+      </div>
+
+      <!-- Evening section -->
+      <div class="routine-section">
+        <div class="routine-section-header">
+          <div class="routine-section-title">
+            🌙 Evening
+          </div>
+          <div style="font-size: 10px; color: var(--text-muted);">0/2 done</div>
+        </div>
+
+        <div class="step-row">
+          <div class="step-check"></div>
+          <div class="step-info">
+            <div class="step-name">CeraVe Acne Control Cleanser</div>
+            <div class="step-product">CeraVe · 2% Salicylic Acid</div>
+            <div class="step-why">End-of-day sebum + pore clearing</div>
+          </div>
+          <div class="step-type-badge">cleanse</div>
+        </div>
+
+        <div class="step-row">
+          <div class="step-check"></div>
+          <div class="step-info">
+            <div class="step-name">Moisturize</div>
+            <div class="step-product">Oil-Free Moisturizer · Ceramides</div>
+          </div>
+          <div class="step-type-badge">hydrate</div>
+        </div>
+      </div>
+
+      <!-- Safety alerts -->
+      <div class="alerts-section">
+        <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 6px;">Safety alerts</div>
+        <div class="alert-item info">
+          <span>ℹ️</span>
+          <span>2 medicated washes assigned today (BP post-workout + BHA evening). Limit reached — any additional shower uses Clinique gentle wash.</span>
+        </div>
+        <div class="alert-item ban">
+          <span>🚫</span>
+          <span>Pond's Dry Skin Cream excluded from face routine. Hand use only.</span>
+        </div>
+        <div class="alert-item warn">
+          <span>⚠️</span>
+          <span>Hyperpigmentation severity 4/5 — SPF is mandatory today before any UV exposure.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ PRODUCT SCAN -->
+<div id="product-scan" class="section">
+  <div class="annotation">
+    <strong>Product scanning flow.</strong> User taps "Add Product" → takes a photo of the product (front label, or ingredients panel) → Claude identifies everything → user confirms/edits → saved to inventory.
+  </div>
+
+  <div style="padding: 0 20px 20px;">
+    <div class="mockup-label">Step 1 — Take photo</div>
+  </div>
+
+  <!-- Step 1: upload -->
+  <div class="module-shell" style="margin-top: 0;">
+    <div class="module-card" style="padding: 16px;">
+      <div class="modal-handle"></div>
+      <div class="modal-title">📷 Scan Product</div>
+      <div class="modal-sub">Photograph the front label or ingredients panel</div>
+      <div class="photo-drop">
+        <span>📦</span>
+        <div>Tap to take photo or choose from library</div>
+        <div style="font-size: 11px; margin-top: 4px; color: var(--text-muted);">Front label · Ingredients panel · Both</div>
+      </div>
+      <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+        <button class="btn-primary">📷 Take Photo</button>
+        <button class="btn-ghost">🖼️ Choose from Library</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding: 0 20px;">
+    <div class="mockup-label">Step 2 — AI review (editable before saving)</div>
+  </div>
+
+  <div class="module-shell" style="margin-top: 0;">
+    <div class="module-card" style="padding: 16px;">
+      <div class="modal-handle"></div>
+      <div class="modal-title">Review Product</div>
+      <div class="modal-sub">AI identified the following — edit anything that's wrong</div>
+
+      <!-- Product thumbnail -->
+      <div style="display: flex; gap: 12px; margin-bottom: 14px; align-items: flex-start;">
+        <div style="width: 64px; height: 64px; border-radius: 8px; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; font-size: 28px; flex-shrink: 0; border: 1px solid var(--border);">🧴</div>
+        <div style="flex: 1;">
+          <div class="review-label">Brand</div>
+          <input class="review-input" value="CeraVe" style="margin-bottom: 6px;">
+          <div class="review-label">Product Name</div>
+          <input class="review-input" value="Acne Control Cleanser">
+        </div>
+      </div>
+
+      <div class="review-field">
+        <div class="review-label">Product Type</div>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px;">
+          <div style="padding: 4px 10px; border-radius: 12px; background: var(--accent); color: #0d1117; font-size: 11px; cursor: pointer;">Medicated Wash</div>
+          <div style="padding: 4px 10px; border-radius: 12px; background: var(--bg-elevated); color: var(--text-dim); font-size: 11px; cursor: pointer;">Gentle Wash</div>
+          <div style="padding: 4px 10px; border-radius: 12px; background: var(--bg-elevated); color: var(--text-dim); font-size: 11px; cursor: pointer;">Moisturizer</div>
+          <div style="padding: 4px 10px; border-radius: 12px; background: var(--bg-elevated); color: var(--text-dim); font-size: 11px; cursor: pointer;">Sunscreen</div>
+          <div style="padding: 4px 10px; border-radius: 12px; background: var(--bg-elevated); color: var(--text-dim); font-size: 11px; cursor: pointer;">Heavy Occlusive</div>
+          <div style="padding: 4px 10px; border-radius: 12px; background: var(--bg-elevated); color: var(--text-dim); font-size: 11px; cursor: pointer;">Treatment</div>
+          <div style="padding: 4px 10px; border-radius: 12px; background: var(--bg-elevated); color: var(--text-dim); font-size: 11px; cursor: pointer;">Other</div>
+        </div>
+      </div>
+
+      <div class="review-field">
+        <div class="review-label">Active Ingredients (AI detected)</div>
+        <div style="margin-top: 4px;">
+          <span class="ingredient-tag">2% Salicylic Acid (BHA)</span>
+          <span class="ingredient-tag">Niacinamide</span>
+          <span class="ingredient-tag warn">Fragrance ⚠️</span>
+          <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">Tap to remove · Type to add more</div>
+        </div>
+      </div>
+
+      <div class="review-field">
+        <div class="review-label">Face Safe?</div>
+        <div style="display: flex; gap: 8px; margin-top: 6px;">
+          <div style="flex:1; padding: 8px; border-radius: 8px; background: rgba(63,185,80,0.15); border: 1px solid rgba(63,185,80,0.3); text-align: center; font-size: 12px; cursor: pointer;">
+            ✓ Safe for Face
+          </div>
+          <div style="flex:1; padding: 8px; border-radius: 8px; background: var(--bg-elevated); border: 1px solid var(--border); text-align: center; font-size: 12px; cursor: pointer; color: var(--text-dim);">
+            🚫 Exclude from Face
+          </div>
+        </div>
+        <div style="font-size: 10px; color: var(--text-muted); margin-top: 5px;">AI assessment: Safe — salicylic acid and niacinamide are appropriate for acne-prone skin.</div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-ghost">← Back</button>
+        <button class="btn-primary">Save to Inventory</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ INVENTORY -->
+<div id="inventory" class="section">
+  <div class="annotation">
+    <strong>Inventory view.</strong> All scanned products in a grid — face-safe items shown normally, banned items shown with a red badge. Any product can be tapped to edit or remove.
+  </div>
+
+  <div class="module-shell">
+    <div class="module-card">
+      <div class="module-header">
+        <div>
+          <div class="module-title">🧴 My Products</div>
+          <div class="module-subtitle">5 products · 1 excluded from face</div>
+        </div>
+      </div>
+
+      <div class="product-grid">
+
+        <!-- Scan button -->
+        <div class="scan-product-btn">
+          <span>📷</span> Add Product
+        </div>
+
+        <div class="product-card">
+          <div class="product-photo">🧴</div>
+          <div class="product-info">
+            <div class="product-brand">CeraVe</div>
+            <div class="product-name">Acne Control Cleanser</div>
+            <div class="product-type">Medicated Wash</div>
+            <div class="product-ingredients">2% Salicylic Acid · Niacinamide</div>
+            <div class="product-status ok">✓ Face safe</div>
+          </div>
+        </div>
+
+        <div class="product-card">
+          <div class="product-photo">🫧</div>
+          <div class="product-info">
+            <div class="product-brand">Generic Rx</div>
+            <div class="product-name">Benzoyl Peroxide Topical Wash 5%</div>
+            <div class="product-type">Medicated Wash</div>
+            <div class="product-ingredients">5% Benzoyl Peroxide</div>
+            <div class="product-status ok">✓ Face safe</div>
+          </div>
+        </div>
+
+        <div class="product-card">
+          <div class="product-photo">💧</div>
+          <div class="product-info">
+            <div class="product-brand">Clinique</div>
+            <div class="product-name">All About Clean Facial Soap</div>
+            <div class="product-type">Gentle Wash</div>
+            <div class="product-ingredients">Menthol · Gentle surfactants</div>
+            <div class="product-status ok">✓ Face safe</div>
+          </div>
+        </div>
+
+        <div class="product-card">
+          <div class="product-photo">✨</div>
+          <div class="product-info">
+            <div class="product-brand">up&up / CeraVe</div>
+            <div class="product-name">Oil-Free Facial Moisturizer</div>
+            <div class="product-type">Moisturizer</div>
+            <div class="product-ingredients">Niacinamide · Ceramides</div>
+            <div class="product-status ok">✓ Face safe</div>
+          </div>
+        </div>
+
+        <div class="product-card" style="opacity: 0.75;">
+          <div class="product-photo">🏺</div>
+          <div class="product-info">
+            <div class="product-brand">Pond's</div>
+            <div class="product-name">Dry Skin Cream</div>
+            <div class="product-type">Heavy Occlusive</div>
+            <div class="product-ingredients">Mineral Oil · Petrolatum</div>
+            <div class="product-status banned">🚫 Face excluded</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function show(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.design-nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+}
+function selectOption(opt) {
+  document.getElementById('opt-a').classList.remove('selected');
+  document.getElementById('opt-b').classList.remove('selected');
+  document.getElementById('opt-' + opt).classList.add('selected');
+}
+</script>
+
+</body>
+</html>

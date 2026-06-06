@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Council Report — Nutrition Label Scan Feature</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f9fafb; color: #111827; line-height: 1.6; }
+  .page { max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+  /* Header */
+  .header { background: #1e293b; color: #f1f5f9; border-radius: 12px; padding: 1.75rem 2rem; margin-bottom: 2rem; }
+  .header h1 { font-size: 1.1rem; font-weight: 500; color: #94a3b8; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 0.4rem; }
+  .header h2 { font-size: 1.5rem; font-weight: 700; color: #f1f5f9; margin-bottom: 0.75rem; }
+  .header .question { font-size: 0.85rem; color: #94a3b8; border-top: 1px solid #334155; padding-top: 0.75rem; margin-top: 0.75rem; }
+  .header .meta { display: flex; gap: 1.5rem; margin-top: 0.5rem; font-size: 0.78rem; color: #64748b; }
+
+  /* Verdict */
+  .verdict { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 2rem; margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .verdict h3 { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280; margin-bottom: 0.5rem; }
+  .verdict h2 { font-size: 1.25rem; font-weight: 700; color: #111827; margin-bottom: 1.25rem; }
+  .verdict-section { margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid #f1f5f9; }
+  .verdict-section:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+  .verdict-section h4 { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.6rem; }
+  .verdict-section p { font-size: 0.9rem; color: #374151; margin-bottom: 0.5rem; }
+  .verdict-section ul { font-size: 0.9rem; color: #374151; padding-left: 1.25rem; }
+  .verdict-section ul li { margin-bottom: 0.35rem; }
+  .tag-agrees { color: #059669; }
+  .tag-clashes { color: #d97706; }
+  .tag-blindspots { color: #7c3aed; }
+  .tag-rec { color: #2563eb; }
+  .tag-action { color: #dc2626; }
+
+  /* One Thing callout */
+  .one-thing { background: #eff6ff; border: 1px solid #bfdbfe; border-left: 4px solid #2563eb; border-radius: 8px; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+  .one-thing .label { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #2563eb; margin-bottom: 0.4rem; }
+  .one-thing p { font-size: 0.92rem; color: #1e3a5f; font-weight: 500; }
+
+  /* Agreement visual */
+  .agreement-grid { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.5rem 2rem; margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .agreement-grid h3 { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280; margin-bottom: 1rem; }
+  .ag-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.75rem; font-size: 0.85rem; }
+  .ag-advisor { width: 180px; font-weight: 500; color: #374151; flex-shrink: 0; }
+  .ag-choice { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
+  .choice-b { background: #dcfce7; color: #15803d; }
+  .choice-a { background: #fef9c3; color: #b45309; }
+  .ag-note { font-size: 0.78rem; color: #6b7280; }
+  .peer-row { background: #f8fafc; border-radius: 6px; padding: 0.4rem 0.75rem; margin-bottom: 0.35rem; font-size: 0.8rem; }
+  .peer-row strong { color: #374151; }
+
+  /* Collapsibles */
+  .collapsibles { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem; }
+  details { background: white; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+  summary { padding: 0.9rem 1.25rem; cursor: pointer; font-weight: 600; font-size: 0.88rem; display: flex; align-items: center; gap: 0.5rem; user-select: none; list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: "▶"; font-size: 0.6rem; color: #9ca3af; transition: transform 0.15s; display: inline-block; }
+  details[open] summary::before { transform: rotate(90deg); }
+  .detail-body { padding: 0 1.25rem 1.25rem; font-size: 0.87rem; color: #374151; border-top: 1px solid #f1f5f9; padding-top: 1rem; line-height: 1.7; }
+  .advisor-tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; margin-left: 0.5rem; }
+  .tag-contrarian { background: #fee2e2; color: #b91c1c; }
+  .tag-firstprinciples { background: #e0e7ff; color: #4338ca; }
+  .tag-expansionist { background: #d1fae5; color: #065f46; }
+  .tag-outsider { background: #fef3c7; color: #92400e; }
+  .tag-executor { background: #ede9fe; color: #5b21b6; }
+
+  /* Footer */
+  .footer { text-align: center; font-size: 0.75rem; color: #9ca3af; padding-top: 2rem; border-top: 1px solid #e5e7eb; margin-top: 2rem; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <h1>LLM Council Report</h1>
+    <h2>Nutrition Label Scan Feature — Design Decision</h2>
+    <div class="question">
+      <strong>Question:</strong> Which entry-point approach best serves the nutrition label scan feature — auto-detect (A), two dedicated buttons (B), or tab toggle inside modal (C)? How should the overall feature be structured for a solo developer maintaining a personal mobile-first life tracker?
+    </div>
+    <div class="meta">
+      <span>5 advisors · 5 peer reviews · 1 chairman synthesis</span>
+      <span>2026-05-23</span>
+    </div>
+  </div>
+
+  <!-- Chairman's Verdict -->
+  <div class="verdict">
+    <h3>Chairman's Verdict</h3>
+    <h2>Build Option B — but extract shared components first</h2>
+
+    <div class="verdict-section">
+      <h4 class="tag-agrees">✓ Where the Council Agrees</h4>
+      <p>Option B (two buttons) wins on first principles and execution speed. Every advisor except The Expansionist landed there, and even The Expansionist's argument was about future architecture rather than a disagreement on day-one UX. The reasoning converges on a single insight: <strong>the user already knows what they're holding before they open the app.</strong> The classification decision costs zero cognitive effort when made by the human who has physical context, and it costs latency, API calls, and failure modes when delegated to AI.</p>
+      <p>All five advisors also agreed the <strong>edit/confirm step before saving is non-negotiable</strong>. OCR on nutrition labels is unreliable enough that saving without review is a health-data integrity risk.</p>
+    </div>
+
+    <div class="verdict-section">
+      <h4 class="tag-clashes">⚡ Where the Council Clashes</h4>
+      <p>The only real split is on Option A's potential. The Expansionist argues auto-classification is a trainable signal pipeline enabling future convergence (receipts, menus, barcodes). The other four treat this as premature architecture that introduces real failure modes on day one for speculative gains on day N.</p>
+      <p>The Expansionist is not wrong about the ceiling — the convergence vision is genuine. The problem is that it prices in the ceiling without pricing in the floor. A solo developer does not have the maintenance budget to build a confidence display, fallback flow, correction loop, and misclassification recovery path. That's not a small tax.</p>
+    </div>
+
+    <div class="verdict-section">
+      <h4 class="tag-blindspots">◉ Blind Spots the Council Caught</h4>
+      <ul>
+        <li><strong>The edit/confirm step already partially absorbs Option A's failure cost</strong> — three reviewers independently caught this. Misclassification doesn't silently corrupt data; it means landing in the wrong modal and backing out. Annoying, not catastrophic. But on mobile mid-meal-prep, still unacceptable.</li>
+        <li><strong>Component reuse is the real implementation decision, not button count.</strong> Does the label modal share the editable table + save function with the existing food modal? If yes, Option B's maintenance cost drops dramatically. If no, you've doubled your surface area.</li>
+        <li><strong>Product cache for repeat scans.</strong> If a user scans a Clif Bar today, they shouldn't scan it again tomorrow. Storing parsed label results by product name and surfacing them as quick-tap options eliminates repeat friction. This is 20-30 lines against the existing SQLite schema.</li>
+      </ul>
+    </div>
+
+    <div class="verdict-section">
+      <h4 class="tag-rec">→ The Recommendation</h4>
+      <p><strong>Build Option B.</strong> Two buttons: "Scan Meal" and "Scan Label" on the toolbar. Dedicated modal per type. Implementation priorities:</p>
+      <ul>
+        <li><strong>1. Maximize component reuse.</strong> Label modal shares the edit/confirm table and save function with the food modal. Only the upstream parsing differs: food photo uses ingredient extraction + USDA lookup; label photo uses structured OCR. Both feed the same editable table → save flow.</li>
+        <li><strong>2. Invest in the label edit/confirm step, not the entry point.</strong> Nutrition label OCR is the real risk. Hallucinated serving sizes and swapped macro values kill trust. Pre-filled editable fields, one-tap focus on mobile.</li>
+        <li><strong>3. Add product cache on first ship.</strong> Save product name + macros after a successful scan. Surface recent products as quick-taps in the label modal header.</li>
+      </ul>
+      <p style="margin-top:0.75rem">Do not build Option A now. If you want to hedge toward it, design upstream parsing as a swappable function so auto-routing can be layered in later without touching modal or save logic.</p>
+    </div>
+
+    <div class="one-thing">
+      <div class="label">⚡ The One Thing to Do First</div>
+      <p>Before writing any new modal code, open the existing food photo modal and identify exactly which components can be extracted and reused: the editable table, the servings multiplier, the save handler. Extract those into shared components first. Then the label modal is a thin wrapper around shared infrastructure. That extraction is the actual work. The button is trivial.</p>
+    </div>
+  </div>
+
+  <!-- Agreement Visual -->
+  <div class="agreement-grid">
+    <h3>Advisor Positions</h3>
+    <div class="ag-row">
+      <div class="ag-advisor">The Contrarian</div>
+      <span class="ag-choice choice-b">B</span>
+      <div class="ag-note">Real risk is OCR accuracy, not entry point. Invest in edit/confirm step.</div>
+    </div>
+    <div class="ag-row">
+      <div class="ag-advisor">First Principles Thinker</div>
+      <span class="ag-choice choice-b">B</span>
+      <div class="ag-note">Don't automate a zero-cost human decision. Map UI to reality.</div>
+    </div>
+    <div class="ag-row">
+      <div class="ag-advisor">The Expansionist</div>
+      <span class="ag-choice choice-a">A</span>
+      <div class="ag-note">Camera-first logging = trainable pipeline → receipts, menus, barcodes.</div>
+    </div>
+    <div class="ag-row">
+      <div class="ag-advisor">The Outsider</div>
+      <span class="ag-choice choice-b">B</span>
+      <div class="ag-note">User already knows it's a label. Every extra step kills the habit.</div>
+    </div>
+    <div class="ag-row">
+      <div class="ag-advisor">The Executor</div>
+      <span class="ag-choice choice-b">B</span>
+      <div class="ag-note">Ship in an afternoon. Concrete first step: add button to toolbar JSX.</div>
+    </div>
+    <div style="margin-top:1rem; padding-top:1rem; border-top:1px solid #f1f5f9;">
+      <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#6b7280;margin-bottom:0.5rem">Peer Review Consensus</div>
+      <div class="peer-row"><strong>Strongest response:</strong> First Principles Thinker (2 votes) and Contrarian (3 votes) — split, both argued B for complementary reasons</div>
+      <div class="peer-row"><strong>Biggest blind spot:</strong> Expansionist unanimously called out for pricing architecture ceiling without pricing solo-dev floor</div>
+      <div class="peer-row"><strong>Universal miss:</strong> Component reuse decision + product cache for repeat scans</div>
+    </div>
+  </div>
+
+  <!-- Advisor Responses (collapsible) -->
+  <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#6b7280;margin-bottom:0.75rem">Full Advisor Responses</div>
+  <div class="collapsibles">
+
+    <details>
+      <summary>The Contrarian <span class="advisor-tag tag-contrarian">Contrarian</span></summary>
+      <div class="detail-body">
+        <p>Option A is the fatal flaw waiting to happen. Auto-classification will misfire constantly — bad lighting, partial labels, angled shots, a cereal box in the background of a meal photo. Every misclassification means the wrong modal launches, the user has to back out, retry, and now logging food is more annoying than just typing it manually. You've introduced latency and failure modes for zero UX gain.</p>
+        <p style="margin-top:0.75rem">The deeper problem with A: you're burning an extra AI call just to classify the photo type, before any actual extraction happens. Mobile users waiting on two sequential AI round-trips will abandon the feature.</p>
+        <p style="margin-top:0.75rem">Option C has a different fatal flaw: tabs inside a modal are a UI anti-pattern on mobile. Small tap targets, cognitive overhead, and users will constantly open the wrong tab and not notice until after they've taken the photo.</p>
+        <p style="margin-top:0.75rem">Option B is obviously correct. Two clearly labeled buttons eliminates every ambiguity. The real risk in this feature isn't which entry point you pick — it's label OCR accuracy. Nutrition labels have inconsistent formatting, small print, and the AI will hallucinate serving sizes or swap protein/carb values. Whatever you build, the confirmation/edit step before saving is non-negotiable.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>The First Principles Thinker <span class="advisor-tag tag-firstprinciples">First Principles</span></summary>
+      <div class="detail-body">
+        <p>The question being asked is "which UI pattern?" but the actual problem is minimum friction between "I have food in front of me" and "macro logged."</p>
+        <p style="margin-top:0.75rem">When someone is about to eat something from a package, they already know it's a package. The classification decision has already happened in their brain before they open the app. Auto-detection adds an AI inference step to eliminate a human tap — but the human already knows the answer. You're burning latency and compute to automate a decision the user already made for free.</p>
+        <p style="margin-top:0.75rem">The actual cost of "two buttons"? One tap. The cognitive overhead of choosing "Food" vs "Label" is near-zero because the user is holding the item. Option B is correct not because of UX theory — it's correct because it maps directly to reality: two genuinely different objects exist in the world, and two buttons represent that accurately without abstraction.</p>
+        <p style="margin-top:0.75rem">The deeper principle: don't automate decisions that have zero friction when made by a human who already has the context. Reserve AI for decisions where the human genuinely lacks information.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>The Expansionist <span class="advisor-tag tag-expansionist">Expansionist</span></summary>
+      <div class="detail-body">
+        <p>Option A is the sleeper here, and everyone is going to miss why. The real opportunity isn't just "which button layout is least annoying." It's that auto-classification is a trainable signal pipeline. Every correction the user makes is a labeled training example. A solo developer building this today is sitting on a dataset that could later power smart logging that requires zero deliberate mode selection ever.</p>
+        <p style="margin-top:0.75rem">The adjacent upside: once you have auto-classify working, the next step is receipt scanning, restaurant menu scanning, barcode lookup. None of those require new UI. They all collapse into the same "point camera, get nutrition data" interaction. Option B permanently forecloses that convergence by training users to think in modes.</p>
+        <p style="margin-top:0.75rem">Yes, auto-classification can misfire. But the fix is a one-tap correction, not a separate button. The confidence display ("Looks like a label — correct?") costs 20 lines of code and turns errors into engagement. Build A. The ceiling on a frictionless, camera-first logging experience is much higher than anyone on this council is pricing in.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>The Outsider <span class="advisor-tag tag-outsider">Outsider</span></summary>
+      <div class="detail-body">
+        <p>Option B. The person standing in their kitchen holding a protein bar is in a specific mental state. They know what they're holding. They know it's a label. Why make them wait for AI to figure out what they already know, or make them tap into a modal and then decide between tabs? Every extra step between "I have food" and "it's logged" is a place the habit dies.</p>
+        <p style="margin-top:0.75rem">Option A sounds clever but adds a failure mode you'll spend time debugging. Option C hides the decision inside a modal — the user has to open something before they can even make the choice. That's worse than B.</p>
+        <p style="margin-top:0.75rem">Two buttons. Right there on the toolbar. The only real question is wording. "Scan Label" might not be immediately clear to someone new. Consider "Scan Package" or a barcode-adjacent icon. But that's a polish problem, not a structural one. B is faster to build, easier to maintain, and most honest about what the user is actually doing.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>The Executor <span class="advisor-tag tag-executor">Executor</span></summary>
+      <div class="detail-body">
+        <p>Option B. Ship it in an afternoon. Two buttons, two modals, done. The Monday morning steps are concrete: add a second toolbar button, copy the existing food photo modal, strip out the USDA lookup flow, replace it with label-parsing logic. You already have the modal scaffold, the Claude vision call pattern, and the food entry save function. You're wiring existing pieces together, not inventing architecture.</p>
+        <p style="margin-top:0.75rem">Option A sounds slick but adds a classification step that will fail on ambiguous photos. When it misclassifies, you need fallback UI anyway — so you've built Option B's complexity plus a failure mode. Option C is the worst of both worlds — one button, but you're managing tab state inside a modal, and the user still has to make a choice that's just been moved one click deeper.</p>
+        <p style="margin-top:0.75rem">The logging habit is the goal. Option B gives the user an explicit mental model: scan a plate, scan a label. No ambiguity, no accidental wrong branch. First step: add the "Scan Label" button to the toolbar JSX, wire it to an empty modal, confirm it renders on mobile.</p>
+      </div>
+    </details>
+
+  </div>
+
+  <!-- Peer Review Highlights (collapsible) -->
+  <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#6b7280;margin-bottom:0.75rem">Peer Review Highlights</div>
+  <div class="collapsibles">
+    <details>
+      <summary>Key themes from all 5 peer reviews</summary>
+      <div class="detail-body">
+        <p><strong>On the strongest response (split between B and D):</strong> Reviewers 1 and 2 named the First Principles Thinker as strongest for reframing the question — "the classification decision is already made in the user's head." Reviewers 3, 4, and 5 named the Contrarian for identifying OCR accuracy as the real risk surface and redirecting design attention to the edit/confirm step.</p>
+        <p style="margin-top:0.75rem"><strong>On the biggest blind spot (unanimous):</strong> All 5 reviewers flagged the Expansionist for treating a solo personal tracker as a scalable product. "Architecture astronautics," "category error," "pricing the upside at full value while pricing the downside near zero."</p>
+        <p style="margin-top:0.75rem"><strong>What all five advisors missed:</strong></p>
+        <ul style="margin-top:0.5rem">
+          <li>The existing edit/confirm step already absorbs most of Option A's misclassification cost (3 reviewers)</li>
+          <li>Component reuse vs. duplication is the actual implementation decision, not button count (3 reviewers)</li>
+          <li>A product-name cache to eliminate repeat scans for habitual items (1 reviewer)</li>
+          <li>Whether the toolbar is the right placement at all for a mobile-primary app (1 reviewer)</li>
+        </ul>
+      </div>
+    </details>
+  </div>
+
+  <div class="footer">
+    LLM Council · Nutrition Label Scan Feature · 2026-05-23 · 5 advisors · 5 peer reviews · 1 chairman
+  </div>
+
+</div>
+</body>
+</html>

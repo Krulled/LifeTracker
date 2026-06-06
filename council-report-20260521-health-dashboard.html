@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Council Report — Health Dashboard Design</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8f9fa; color: #1a1a2e; line-height: 1.6; font-size: 15px; }
+  .page { max-width: 860px; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; }
+
+  /* Header */
+  .header { border-bottom: 2px solid #1a1a2e; padding-bottom: 1.25rem; margin-bottom: 2rem; }
+  .label { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #888; margin-bottom: 0.4rem; }
+  .question { font-size: 1.1rem; font-weight: 600; color: #1a1a2e; line-height: 1.5; }
+  .meta { margin-top: 0.6rem; font-size: 0.78rem; color: #888; }
+
+  /* Verdict */
+  .verdict { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 2rem; margin-bottom: 2rem; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .verdict-title { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #888; margin-bottom: 1.5rem; }
+  .verdict h2 { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #555; margin: 1.5rem 0 0.5rem; border-top: 1px solid #f0f0f0; padding-top: 1.25rem; }
+  .verdict h2:first-of-type { margin-top: 0; border-top: none; padding-top: 0; }
+  .verdict p { font-size: 0.92rem; color: #2d2d2d; margin-bottom: 0.75rem; }
+  .verdict p:last-child { margin-bottom: 0; }
+  .verdict strong { color: #1a1a2e; }
+
+  /* One thing */
+  .one-thing { background: #1a1a2e; color: #fff; border-radius: 10px; padding: 1.5rem 2rem; margin-bottom: 2rem; }
+  .one-thing .label { color: rgba(255,255,255,0.5); }
+  .one-thing p { font-size: 0.95rem; line-height: 1.65; color: #e8e8f0; }
+  .one-thing strong { color: #7dd3fc; }
+
+  /* Agreement grid */
+  .alignment { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 1.75rem 2rem; margin-bottom: 2rem; }
+  .alignment-title { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #888; margin-bottom: 1.25rem; }
+  .advisor-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; }
+  .advisor-cell { border-radius: 8px; padding: 0.9rem 0.5rem; text-align: center; font-size: 0.72rem; font-weight: 600; }
+  .advisor-name { display: block; margin-bottom: 0.35rem; font-size: 0.65rem; color: #666; font-weight: 500; }
+  .advisor-stance { display: block; font-size: 0.78rem; font-weight: 700; }
+  .cell-critical  { background: #fef2f2; border: 1px solid #fca5a5; }
+  .cell-critical .advisor-stance { color: #dc2626; }
+  .cell-reform    { background: #eff6ff; border: 1px solid #93c5fd; }
+  .cell-reform .advisor-stance { color: #1d4ed8; }
+  .cell-expand    { background: #f0fdf4; border: 1px solid #86efac; }
+  .cell-expand .advisor-stance { color: #16a34a; }
+  .cell-pragmatic { background: #fefce8; border: 1px solid #fde047; }
+  .cell-pragmatic .advisor-stance { color: #854d0e; }
+
+  .theme-row { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1.25rem; }
+  .theme-item { display: flex; align-items: flex-start; gap: 0.75rem; font-size: 0.85rem; }
+  .theme-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 6px; }
+  .dot-agree { background: #16a34a; }
+  .dot-clash { background: #dc2626; }
+  .dot-blind { background: #9333ea; }
+
+  /* Collapsibles */
+  .section { margin-bottom: 1rem; }
+  details { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; }
+  summary { padding: 0.9rem 1.25rem; cursor: pointer; font-size: 0.82rem; font-weight: 600; color: #444; display: flex; align-items: center; gap: 0.5rem; list-style: none; user-select: none; }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: "▶"; font-size: 0.6rem; color: #999; transition: transform 0.2s; }
+  details[open] summary::before { transform: rotate(90deg); }
+  .detail-body { padding: 1rem 1.25rem 1.25rem; border-top: 1px solid #f0f0f0; font-size: 0.87rem; line-height: 1.7; color: #333; }
+  .advisor-tag { display: inline-block; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 0.2rem 0.5rem; border-radius: 4px; margin-bottom: 0.75rem; }
+  .tag-contrarian  { background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; }
+  .tag-firstprinciples { background: #eff6ff; color: #1d4ed8; border: 1px solid #93c5fd; }
+  .tag-expansionist { background: #f0fdf4; color: #16a34a; border: 1px solid #86efac; }
+  .tag-outsider    { background: #faf5ff; color: #9333ea; border: 1px solid #d8b4fe; }
+  .tag-executor    { background: #fefce8; color: #854d0e; border: 1px solid #fde047; }
+
+  .peer-item { margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid #f0f0f0; }
+  .peer-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .peer-q { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #888; margin-bottom: 0.3rem; }
+
+  .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #e0e0e0; font-size: 0.72rem; color: #aaa; text-align: center; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <div class="label">LLM Council Report</div>
+    <div class="question">Is the Physical/Mental split the right top-level framework for the health dashboard? Is the two-card layout appropriate for daily use?</div>
+    <div class="meta">May 21, 2026 · 5 advisors · 5 peer reviewers · 1 chairman · life-tracker-zach.fly.dev</div>
+  </div>
+
+  <!-- ONE THING FIRST -->
+  <div class="one-thing">
+    <div class="label">The One Thing to Do First</div>
+    <p><strong>Move Energy Balance to the top and rename it.</strong> Call it "Today's Balance" or "Energy Score" and make it the first thing on the page. This single change does more than any taxonomy restructure: it establishes that the dashboard has a point of view, orients every other metric relative to a single integrating signal, and removes the false implication that Physical and Mental are equal and independent. The two cards below can stay exactly as they are for now. Fix the hierarchy before touching the taxonomy.</p>
+  </div>
+
+  <!-- VERDICT -->
+  <div class="verdict">
+    <div class="verdict-title">Chairman's Verdict</div>
+
+    <h2>Where the Council Agrees</h2>
+    <p>The Physical/Mental split is the wrong organizing principle. Every advisor reached this conclusion from a different angle — and that level of convergence is a verdict. The framework was borrowed from medicine and fit to available data, not derived from the user's actual daily questions.</p>
+    <p>Energy Balance is misplaced. Putting it below both cards as a footer contradicts its actual role. Multiple advisors independently noticed you separated it out because it didn't fit either bucket — which exposes that the Physical/Mental frame is already failing before the layout is evaluated.</p>
+    <p>Status dots without directionality are half-finished. A snapshot of today's state without any sense of trajectory — yesterday vs. today, this week vs. last — is not enough to support daily decision-making.</p>
+
+    <h2>Where the Council Clashes</h2>
+    <p>The Executor says ship it and fix the data pipeline first. Everyone else says the architecture itself is the problem. This is a real tension. The Executor's position is only defensible if the framework is roughly correct. If the organizing principle actively misfires — filing Sleep under Mental, separating correlated variables, putting the integrating metric at the bottom — then a clean data pipeline feeding a bad frame produces confident wrong answers faster.</p>
+    <p>The proposed replacements also diverge: Recovery/Fuel/Consistency (First Principles); Right Now / Trend Signals (Expansionist); a single readiness score (Contrarian). A readiness score collapses nuance. A temporal split changes the dashboard's cognitive job. A decision-based framework requires knowing what decisions this user actually makes. The council did not resolve which replacement is correct.</p>
+
+    <h2>Blind Spots the Council Caught</h2>
+    <p><strong>The self-reflection function was never examined.</strong> This is a single-user personal tool. The SOC/monospace aesthetic that advisors praised as "functional" may be exactly wrong — it feels like monitoring a server, not checking in with yourself.</p>
+    <p><strong>The review ritual was ignored.</strong> Morning and evening are different cognitive modes. Morning: what do I do today? Evening: did I hit my targets? A static layout optimized for neither is a structural failure no taxonomy debate resolves.</p>
+    <p><strong>The motivation layer was absent.</strong> Dashboards fail through abandonment, not poor categorization. Streaks, momentum, visible progress over time — the features that make someone return tomorrow — were not discussed. A snapshot tool cannot support habit formation.</p>
+    <p><strong>User goals were treated as universal.</strong> The taxonomy debate assumed a generic user. But this specific user has specific priorities. A goal-agnostic framework is a framework for nobody.</p>
+
+    <h2>The Recommendation</h2>
+    <p>Restructure around three questions, not two medical categories.</p>
+    <p><strong>Top — How am I doing right now?</strong> A single readiness signal (composite score or minimal set of highest-leverage metrics: sleep quality, caloric balance, hydration). Answers whether today is a push day or a recovery day in under three seconds.</p>
+    <p><strong>Middle — What needs attention today?</strong> The current two-card layout can survive here, relabeled. Not Physical/Mental — instead something like <em>Body Inputs</em> (Nutrition, Hydration, Weight) and <em>Recovery & Mind</em> (Sleep, Mood, Habits). Move Tasks out entirely; it belongs in a task manager, not a health card. Keep status dots but add directional indicators — up/down delta from yesterday.</p>
+    <p><strong>Bottom — Am I trending in the right direction?</strong> Week-over-week summaries. This is where Energy Balance belongs. A weight trend line. Habit completion rate over 7 days. The SOC aesthetic is worth keeping for density. What needs to change is the emotional register — one element that makes this feel like a personal mirror, not a monitoring console.</p>
+  </div>
+
+  <!-- ALIGNMENT VISUAL -->
+  <div class="alignment">
+    <div class="alignment-title">Advisor Alignment Map</div>
+    <div class="advisor-grid">
+      <div class="advisor-cell cell-critical">
+        <span class="advisor-name">Contrarian</span>
+        <span class="advisor-stance">Framework fails</span>
+      </div>
+      <div class="advisor-cell cell-reform">
+        <span class="advisor-name">First Principles</span>
+        <span class="advisor-stance">Wrong question asked</span>
+      </div>
+      <div class="advisor-cell cell-expand">
+        <span class="advisor-name">Expansionist</span>
+        <span class="advisor-stance">Bigger opportunity</span>
+      </div>
+      <div class="advisor-cell cell-critical">
+        <span class="advisor-name">Outsider</span>
+        <span class="advisor-stance">Unintuitive framing</span>
+      </div>
+      <div class="advisor-cell cell-pragmatic">
+        <span class="advisor-name">Executor</span>
+        <span class="advisor-stance">Ship it, fix dots</span>
+      </div>
+    </div>
+    <div class="theme-row">
+      <div class="theme-item"><span class="theme-dot dot-agree"></span><span><strong>All agree:</strong> Physical/Mental is borrowed taxonomy, not user-need taxonomy. Energy Balance is misplaced below both cards.</span></div>
+      <div class="theme-item"><span class="theme-dot dot-clash"></span><span><strong>Clash:</strong> Executor says ship it; 4 others say the architecture is the problem. Both can't be right.</span></div>
+      <div class="theme-item"><span class="theme-dot dot-blind"></span><span><strong>Blind spot:</strong> Peer review caught the missing motivation layer, the morning vs. evening ritual distinction, and the self-reflection function — none of which any advisor raised.</span></div>
+    </div>
+  </div>
+
+  <!-- ADVISOR DETAILS -->
+  <div class="label" style="margin-bottom:0.75rem;">Advisor Responses</div>
+  <div class="section">
+    <details>
+      <summary>The Contrarian</summary>
+      <div class="detail-body">
+        <span class="advisor-tag tag-contrarian">Contrarian</span>
+        <p>The Physical/Mental split is a legacy medical taxonomy being cosplayed as a personal insight system. It's organizationally convenient but causally backwards for how a real person experiences their day. The fatal flaw: the variables you care about most — energy, focus, mood, performance — are outputs of interactions between the two buckets, not outputs of either bucket alone. Sleep (filed under Mental) is the single biggest driver of caloric hunger and workout recovery (filed under Physical). Splitting them severs the most important feedback loop in the entire system before the user even starts reading.</p>
+        <p>Energy Balance sitting below both cards is wrong — it is the integrating signal that explains both cards and should anchor the top. "Tasks" under Mental Health is a reach. Task completion is behavioral, not psychological. Status dots on siloed metrics without cross-card correlation is false precision. Green Sleep + Red Nutrition tells you nothing useful without knowing the interaction.</p>
+        <p>What is missing is not more data — it is a single daily readiness score computed from cross-domain inputs, placed at the very top. That is the thing a person opening a health dashboard at 7am actually needs to see first. The two-card layout is not appropriate for daily use. It is appropriate for a hospital intake form.</p>
+      </div>
+    </details>
+  </div>
+  <div class="section">
+    <details>
+      <summary>The First Principles Thinker</summary>
+      <div class="detail-body">
+        <span class="advisor-tag tag-firstprinciples">First Principles</span>
+        <p>The Physical/Mental split is a legacy taxonomy, not a user-need taxonomy. Ask the real question: what does someone actually want to know when they open this dashboard? Not "how is my physical health?" They want to know: Am I recovering well enough to perform today? Am I on track with what I set out to do this week? What needs my attention right now?</p>
+        <p>The Physical/Mental split maps to a medical classification system, not to daily decision-making. Sleep belongs in "physical" by any biological measure — it's CNS restoration, hormonal regulation, cellular repair. You've put it in "Mental." That reveals the framework is bending to fit data rather than serving a purpose.</p>
+        <p>The deeper problem: the two-card layout answers "what happened?" but not "so what?" Status dots tell you green/amber/red without telling you what to change. The decision-based reframe maps to Recovery / Fuel / Consistency — a principled design rather than an organizational compromise.</p>
+      </div>
+    </details>
+  </div>
+  <div class="section">
+    <details>
+      <summary>The Expansionist</summary>
+      <div class="detail-body">
+        <span class="advisor-tag tag-expansionist">Expansionist</span>
+        <p>The Physical/Mental split is a 1990s clinical taxonomy dressed up in a dark theme. The real upside hiding here is systems thinking about the self. What you're actually tracking is energy, recovery, and execution capacity. Sleep (Mental card) is the biggest lever for physical recovery. Mood is downstream of nutrition timing and workout load. The two-card split actively buries the insight that these systems are the same system.</p>
+        <p>The bigger opportunity: reorganize around temporal urgency. Top card: "Right now" — calories remaining, hydration, sleep debt, tasks due. Bottom card: "Trend signals" — week-over-week patterns where something is drifting.</p>
+        <p>The Energy Balance card being full-width below both is the most honest design in the layout — it implicitly acknowledges that calories consumed vs. burned is a unifying metric. That instinct is right. Extend it. Status dots are being wasted on siloed categories. If all five Mental dots are green but weight is trending up for two weeks, the dashboard is technically correct and completely misleading.</p>
+      </div>
+    </details>
+  </div>
+  <div class="section">
+    <details>
+      <summary>The Outsider</summary>
+      <div class="detail-body">
+        <span class="advisor-tag tag-outsider">Outsider</span>
+        <p>The Physical/Mental split is borrowed from clinical taxonomy, not from how a person actually checks in with themselves. Nobody wakes up and thinks "let me review my physical health." They think "how am I doing today." The two-card layout creates an invisible hierarchy problem. Side-by-side implies equal weight. But sleep dominates everything else — it multiplies or divides the value of every other metric. Burying sleep inside "Mental Health" alongside Mood and Tasks obscures this.</p>
+        <p>The Energy Balance card being "below both" is the most interesting signal — you separated it out because it didn't fit either bucket cleanly, which tells you the Physical/Mental frame is already leaking at the seams. Energy is the through-line that connects sleep quality, mood, workout performance, and nutrition. That's not a footer card. That's the organizing concept.</p>
+        <p>What's missing: time. Status dots are snapshots. A person using this daily needs to see direction, not just state. What's working: the SOC-analyst aesthetic is correct for this use case — dense, glanceable, no hand-holding. "Body inputs" and "Mind state" would be more intuitive labels.</p>
+      </div>
+    </details>
+  </div>
+  <div class="section">
+    <details>
+      <summary>The Executor</summary>
+      <div class="detail-body">
+        <span class="advisor-tag tag-executor">Executor</span>
+        <p>The split is fine, ship it. Don't reorganize. What actually matters for daily use: Can you open it and immediately see what needs attention? If the status dots are working — green means nothing to do, amber/red means act — then the framework is irrelevant. Nobody cares if Sleep is "Mental Health" as long as the dot tells you to go to bed earlier. The only real failure mode: dots that lie.</p>
+        <p>What to actually do this week: 1) Open the dashboard every morning for 5 days, write down one thing you can't find fast enough. 2) Check if the Energy Balance card is the first thing your eyes go to — if not, move it above the two cards. 3) Verify every status dot reflects same-day data, not yesterday's.</p>
+        <p>What's missing: an "action needed" count in the page title. "Life Tracker (2)" tells you something needs attention before you even open it. That's a 20-minute implementation that beats any layout reorganization. Stop designing. Start logging whether you actually use it daily.</p>
+      </div>
+    </details>
+  </div>
+
+  <!-- PEER REVIEWS -->
+  <div class="label" style="margin-top:2rem; margin-bottom:0.75rem;">Peer Review Highlights</div>
+  <details>
+    <summary>Peer Review Summary (5 reviewers)</summary>
+    <div class="detail-body">
+      <div class="peer-item">
+        <div class="peer-q">Strongest response (unanimous)</div>
+        <p>All 5 reviewers selected Response D (First Principles) as the strongest. Reason: it is the only response that reframes the question productively — shifting from "is this taxonomy correct?" to "what decisions does this dashboard actually serve?" — and then derives a concrete alternative framework (Recovery/Fuel/Consistency) from that reframe.</p>
+      </div>
+      <div class="peer-item">
+        <div class="peer-q">Biggest blind spot (unanimous)</div>
+        <p>All 5 reviewers flagged Response E (Executor) as having the biggest blind spot. The "ship it" posture mistakes operational adequacy for design quality. It has no model of what good looks like. Crucially: you cannot fix "dots that lie" without fixing what the dots represent — the data pipeline and the information architecture are the same problem.</p>
+      </div>
+      <div class="peer-item">
+        <div class="peer-q">What all five missed</div>
+        <p>Reviewer 1: The self-reflection function. This is a personal tool, not a monitoring terminal. Does the design prompt reflection or discourage it?</p>
+        <p>Reviewer 2: User goals were treated as universal. The organizing principle should be derived from what this specific user is trying to change.</p>
+        <p>Reviewer 3: The morning vs. evening review ritual. These are different cognitive modes requiring different information ordering — a static layout serves neither.</p>
+        <p>Reviewer 4: The motivation layer. Dashboards fail through abandonment. Streaks, momentum, visible progress over time were not discussed by any advisor.</p>
+        <p>Reviewer 5: Context at time of use — mobile vs. desktop, glance vs. audit. The right information density depends entirely on when and how the user actually opens it.</p>
+      </div>
+    </div>
+  </details>
+
+  <div class="footer">LLM Council · May 21, 2026 · Health Dashboard Design · life-tracker-zach.fly.dev</div>
+</div>
+</body>
+</html>

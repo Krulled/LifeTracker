@@ -1,0 +1,77 @@
+<h2>Full Design — Nutrition AI Draft Buttons</h2>
+<p class="subtitle">How all the pieces connect. Review each section and confirm before we write the spec.</p>
+
+<div class="section">
+  <span class="label">Backend — /api/food/chat</span>
+  <h3>System prompt contract</h3>
+  <p>Add an instruction to the existing system prompt: when the reply mentions specific food items with concrete calorie/macro numbers, append a <code>```drafts</code> fenced block <em>after</em> the human-readable text. The AI should NOT include the block when the reply is general advice (no specific numbers).</p>
+  <div style="background:#111;border-radius:6px;padding:0.75rem 1rem;font-size:0.78rem;color:#ccc;font-family:monospace;margin-top:0.5rem">
+    <span style="color:#52b788">// appended to system prompt:</span><br>
+    When your reply includes specific calorie/macro data for one or more foods, append this block on a new line after your text reply — do NOT include it otherwise:<br>
+    <span style="color:#7eb8f7">```drafts<br>
+    [{"food_name":"...","calories":0,"protein_g":0,"carbs_g":0,"fat_g":0}]<br>
+    ```</span>
+  </div>
+</div>
+
+<div class="section">
+  <span class="label">Backend — parsing</span>
+  <h3>Strip + return structured data</h3>
+  <p>After the LLM responds, backend uses a regex to find the <code>```drafts</code> block, strips it from the reply, parses the JSON, and returns both fields. If no block is found, <code>drafts</code> is omitted from the response.</p>
+  <div style="background:#111;border-radius:6px;padding:0.75rem 1rem;font-size:0.78rem;color:#ccc;font-family:monospace;margin-top:0.5rem">
+    <span style="color:#888">// Response shape when food data present:</span><br>
+    {"reply": "A chicken breast 200g has ~330 cal...", "drafts": [{"food_name": "Chicken breast 200g", "calories": 330, "protein_g": 62, "carbs_g": 0, "fat_g": 7}]}<br><br>
+    <span style="color:#888">// Response shape for advice-only reply:</span><br>
+    {"reply": "Try spacing meals 3-4 hours apart for better energy..."}
+  </div>
+</div>
+
+<div class="section">
+  <span class="label">Frontend — CalorieChatbot</span>
+  <h3>Draft buttons on AI messages</h3>
+  <p>Messages get an optional <code>drafts</code> array stored alongside <code>content</code>. When rendered, each draft item gets its own button below the bubble.</p>
+  <div style="background:#1a1a2e;border-radius:8px;padding:1rem;font-size:0.82rem;color:#ccc;font-family:monospace;margin-top:0.5rem">
+    <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">
+      <span>🤖</span>
+      <div style="background:#2a2a3e;padding:8px 12px;border-radius:8px;max-width:340px">
+        A chicken breast 200g has ~330 cal, 62g protein, 0g carbs, 7g fat. A medium egg has 70 cal, 6g protein, 0g carbs, 5g fat.
+      </div>
+    </div>
+    <div style="margin-left:28px;display:flex;flex-direction:column;gap:5px">
+      <button style="background:#1e3a2e;color:#52b788;border:1px solid #2d6a4f;border-radius:4px;padding:5px 10px;font-size:0.75rem;cursor:pointer;text-align:left">➕ Chicken breast 200g · 330 cal → Day Panel</button>
+      <button style="background:#1e3a2e;color:#52b788;border:1px solid #2d6a4f;border-radius:4px;padding:5px 10px;font-size:0.75rem;cursor:pointer;text-align:left">➕ Medium egg · 70 cal → Day Panel</button>
+    </div>
+  </div>
+  <p style="margin-top:0.6rem;font-size:0.85rem">Clicking calls <code>onDraftEntry(draft)</code> prop — lifts the data up to <code>CalorieModule</code>.</p>
+</div>
+
+<div class="section">
+  <span class="label">Frontend — CalorieModule → CalorieDayPanel</span>
+  <h3>Pre-fill the inline form</h3>
+  <p><code>CalorieModule</code> holds a <code>pendingDraft</code> state. When set, it passes it as <code>prefillEntry</code> to <code>CalorieDayPanel</code>. The panel watches that prop: when it changes, it opens the inline food form with values pre-filled and defaults the meal type based on time of day (breakfast before noon, lunch before 3pm, dinner otherwise). The user can change the meal type and edit any field before hitting Add.</p>
+  <div style="background:#1a1a2e;border-radius:8px;padding:1rem;font-size:0.82rem;color:#ccc;font-family:monospace;margin-top:0.5rem">
+    <div style="background:#2a2a3e;border-radius:6px;padding:8px 10px;margin-bottom:6px;font-size:0.75rem;color:#7eb8f7">✏️ Form opens pre-filled in right panel — user can adjust before saving</div>
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <div style="background:#1e2a1e;border:1px solid #3a5a3a;border-radius:4px;padding:4px 8px;font-size:0.75rem">Food: <span style="color:#a8d8b0">Chicken breast 200g</span></div>
+      <div style="display:flex;gap:4px">
+        <div style="background:#1e2a1e;border:1px solid #3a5a3a;border-radius:4px;padding:4px 8px;font-size:0.75rem;flex:1">Cal: <span style="color:#a8d8b0">330</span></div>
+        <div style="background:#1e2a1e;border:1px solid #3a5a3a;border-radius:4px;padding:4px 8px;font-size:0.75rem;flex:1">P: <span style="color:#a8d8b0">62g</span></div>
+        <div style="background:#1e2a1e;border:1px solid #3a5a3a;border-radius:4px;padding:4px 8px;font-size:0.75rem;flex:1">C: <span style="color:#a8d8b0">0g</span></div>
+        <div style="background:#1e2a1e;border:1px solid #3a5a3a;border-radius:4px;padding:4px 8px;font-size:0.75rem;flex:1">F: <span style="color:#a8d8b0">7g</span></div>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:2px">
+        <button style="background:#3a6a8a;color:#fff;border:none;border-radius:4px;padding:4px 10px;font-size:0.75rem">🌙 Dinner ▾</button>
+        <button style="background:#52b788;color:#111;border:none;border-radius:4px;padding:4px 16px;font-size:0.75rem;flex:1">Add</button>
+        <button style="background:none;color:#888;border:1px solid #444;border-radius:4px;padding:4px 8px;font-size:0.75rem">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <span class="label">Scope</span>
+  <h3>What's NOT changing</h3>
+  <p>No new endpoints. No new components. No changes to the food log save flow, templates, or photo scanner. The chatbot's existing message history, suggestions, and scroll behavior are untouched. Only the system prompt, the response parser, message rendering, and the CalorieModule/CalorieDayPanel wiring change.</p>
+</div>
+
+<p class="subtitle" style="margin-top:1rem">Does this design look right? Reply in the terminal to confirm or request changes.</p>

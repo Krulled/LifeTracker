@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Council Report — Hub Safety Audit</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8f9fa; color: #1a1a2e; line-height: 1.6; }
+  .container { max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem; }
+  .question-block { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
+  .question-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; margin-bottom: 0.5rem; }
+  .question-text { font-size: 0.95rem; color: #334155; }
+  h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: 0.25rem; }
+  .meta { font-size: 0.8rem; color: #94a3b8; margin-bottom: 1.75rem; }
+  .verdict { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 1.5rem; }
+  .verdict-header { background: #1e293b; color: #f8fafc; padding: 0.75rem 1.25rem; font-weight: 700; font-size: 0.85rem; letter-spacing: 0.05em; text-transform: uppercase; }
+  .verdict-section { padding: 1.25rem 1.5rem; border-bottom: 1px solid #f1f5f9; }
+  .verdict-section:last-child { border-bottom: none; }
+  .verdict-section h2 { font-size: 0.9rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem; }
+  .verdict-section p { font-size: 0.9rem; color: #334155; margin-bottom: 0.6rem; }
+  .verdict-section p:last-child { margin-bottom: 0; }
+  .verdict-section strong { color: #1e293b; }
+  .one-thing { background: #1e3a5f; color: #e0f2fe; border-radius: 8px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
+  .one-thing-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #7dd3fc; margin-bottom: 0.5rem; }
+  .one-thing-text { font-size: 0.95rem; line-height: 1.6; }
+  .alignment-grid { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
+  .alignment-grid h2 { font-size: 0.85rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  th { text-align: left; color: #94a3b8; font-weight: 600; padding: 0.35rem 0.5rem; border-bottom: 1px solid #f1f5f9; }
+  td { padding: 0.45rem 0.5rem; border-bottom: 1px solid #f8fafc; vertical-align: middle; }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 600; padding: 0.15rem 0.5rem; border-radius: 99px; }
+  .badge-agree { background: #d1fae5; color: #065f46; }
+  .badge-clash { background: #fee2e2; color: #991b1b; }
+  .badge-neutral { background: #f1f5f9; color: #475569; }
+  .advisors { margin-bottom: 1.5rem; }
+  details { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 0.5rem; overflow: hidden; }
+  summary { padding: 0.85rem 1.25rem; cursor: pointer; font-weight: 600; font-size: 0.88rem; display: flex; align-items: center; gap: 0.5rem; list-style: none; user-select: none; }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: "▶"; font-size: 0.65rem; color: #94a3b8; transition: transform 0.2s; }
+  details[open] summary::before { transform: rotate(90deg); }
+  .advisor-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .advisor-body { padding: 1rem 1.25rem; font-size: 0.87rem; color: #334155; line-height: 1.65; border-top: 1px solid #f1f5f9; }
+  .reviews { margin-bottom: 1.5rem; }
+  .review-body { padding: 0.85rem 1.25rem; font-size: 0.84rem; color: #475569; line-height: 1.6; border-top: 1px solid #f1f5f9; }
+  .review-q { font-weight: 600; color: #334155; margin-top: 0.65rem; margin-bottom: 0.2rem; font-size: 0.81rem; }
+  .review-q:first-child { margin-top: 0; }
+  footer { text-align: center; font-size: 0.75rem; color: #94a3b8; padding: 2rem 0 1rem; }
+  .section-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; margin: 1.75rem 0 0.75rem; }
+  .alert-row { background: #fef9c3; border-left: 3px solid #ca8a04; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; font-size: 0.87rem; color: #713f12; margin-bottom: 0.75rem; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Council Verdict</h1>
+  <div class="meta">Hub Safety Audit · 2026-05-19 · 5 advisors · 5 peer reviewers · 1 chairman</div>
+
+  <div class="question-block">
+    <div class="question-label">Question Brought to the Council</div>
+    <div class="question-text">After a focused audit and bug-fix session on the Life Tracker hub, is it fully completed and safe for daily confident use — or are there meaningful remaining gaps, architectural risks, or categories of issue the audits may have missed entirely?</div>
+  </div>
+
+  <!-- VERDICT -->
+  <div class="verdict">
+    <div class="verdict-header">Council Verdict</div>
+
+    <div class="verdict-section">
+      <h2>Where the Council Agrees</h2>
+      <p><strong>The 90-day data cap is a ticking clock.</strong> Weight and Body Measurements are capped at 90 entries. Data older than that is invisible — not deleted, but absent from all charts and analyses. Nothing in the UI signals this. After 90 days of daily tracking, your own history silently disappears from view.</p>
+      <p><strong>Write-path validation is absent.</strong> Flask accepts whatever is POSTed to any endpoint — no range checks, no required-field enforcement, no type validation. A mis-entry goes straight to the database and corrupts analyses with no error signal.</p>
+      <p><strong>The audit was a maintenance event, not a completion event.</strong> The fixes are real and correct, but the confidence they produce may be larger than warranted. There is no regression harness to prove the next change doesn't break the last fix.</p>
+    </div>
+
+    <div class="verdict-section">
+      <h2>Where the Council Clashes</h2>
+      <p><strong>The Contrarian raised concurrent-tab state as a top-three risk</strong> — optimistic UI diverging across two open tabs with a 10-second correction window. All five peer reviewers independently called this out as overstated for a single-user personal tracker. The concern is technically real but practically negligible. The council does not recommend spending any time on tab-sync logic. The Contrarian's Finance silent-failure point was valid; the concurrent-tab framing buried it.</p>
+    </div>
+
+    <div class="verdict-section">
+      <h2>Blind Spots the Council Caught</h2>
+      <div class="alert-row">⚠ All five peer reviewers — independently — named the same gap the five advisors missed entirely.</div>
+      <p><strong>Authentication surface area.</strong> The PIN locks the frontend. The Flask API routes themselves may not be gated server-side. If any <code>/api/...</code> endpoint accepts requests without a valid session token, anyone who discovers the Fly.io URL can read and write raw data — sleep history, weight, body measurements, financial behavior — with no PIN required.</p>
+      <p>The specific questions that were never examined: Are all Flask routes protected with a server-side auth check, or only the frontend render? Is the PIN mechanism susceptible to brute-force (no rate limiting, no lockout)? What is the session/token lifetime? Is HTTPS enforced at the transport layer?</p>
+      <p>Every reviewer ranked this as higher severity than any data-cap or UTC issue. A compromised auth layer makes every other fix irrelevant.</p>
+    </div>
+
+    <div class="verdict-section">
+      <h2>The Recommendation</h2>
+      <p>The hub is usable for daily tracking, but it is not safe for confident use until the authentication layer is audited. The UTC fixes, the cascade fix, the habit-count filtering — those are real and correct. But they operate inside an application that may be fully readable and writable to anyone with the URL.</p>
+      <p>After auth is confirmed, two concrete follow-ups: (1) raise or surface the 90-day cap with a UI indicator, and (2) add at minimum range validation on Sleep hours, Weight values, and Body Measurement fields in Flask before they hit the database.</p>
+      <p>Do not treat the audit as closed. Treat it as having found the application-layer bugs while the infrastructure-layer security question remains open.</p>
+    </div>
+  </div>
+
+  <!-- ONE THING -->
+  <div class="one-thing">
+    <div class="one-thing-label">The One Thing to Do First</div>
+    <div class="one-thing-text">Open <strong>backend/app.py</strong> and verify that every Flask route — not just the frontend render route, but every <code>/api/...</code> endpoint — requires a valid authenticated session before returning data or accepting writes. If any route is reachable without auth, that is the fix. Everything else waits.</div>
+  </div>
+
+  <!-- ALIGNMENT GRID -->
+  <div class="alignment-grid">
+    <h2>Advisor Position Summary</h2>
+    <table>
+      <tr><th>Advisor</th><th>Verdict</th><th>Key Risk Named</th></tr>
+      <tr><td>The Contrarian</td><td><span class="badge badge-clash">Not safe yet</span></td><td>Concurrent state, Finance silent failure, no regression tests</td></tr>
+      <tr><td>The First Principles Thinker</td><td><span class="badge badge-neutral">Conditionally safe</span></td><td>Incomplete UTC audit, unaudited ORM cascades, no regression harness</td></tr>
+      <tr><td>The Expansionist</td><td><span class="badge badge-neutral">Safe but incomplete</span></td><td>Finance gap, cap archive strategy, AI chatbot under partial data</td></tr>
+      <tr><td>The Outsider</td><td><span class="badge badge-clash">False confidence</span></td><td>Invisible data caps, Finance appears broken, no end-to-end flow validated</td></tr>
+      <tr><td>The Executor</td><td><span class="badge badge-agree">Usable today</span></td><td>Write-path validation absent, no backup story, 90-day cap deadline</td></tr>
+    </table>
+  </div>
+
+  <!-- ADVISORS -->
+  <div class="section-label">Advisor Responses (click to expand)</div>
+  <div class="advisors">
+    <details>
+      <summary><span class="advisor-dot" style="background:#ef4444"></span> The Contrarian</summary>
+      <div class="advisor-body">Not safe enough to stop auditing. Three categories of risk remain. First: concurrent state. If the app is open on two tabs and a habit is logged on one, the other tab's optimistic UI state will diverge. The 10-second poll interval means there's a consistent window of inconsistency — cosmetic until it causes a double-log or missed log. Second: error boundaries exist but haven't been audited for completeness — some components may sit outside ErrorBoundary wrappers, meaning a single render error could take down an entire module silently. Third: the Finance module's localhost dependency is a silent production failure — it doesn't error visibly, it just doesn't work. A user might not realize Finance data isn't being tracked until months have passed. No regression tests mean the next fix is statistically guaranteed to introduce new bugs.</div>
+    </details>
+    <details>
+      <summary><span class="advisor-dot" style="background:#8b5cf6"></span> The First Principles Thinker</summary>
+      <div class="advisor-body">The question assumes the audit was complete. But what failure modes were never in scope? The fixes addressed what was found, but systematic gaps remain. The UTC pattern was applied to 4-5 places — but has every "today" endpoint been catalogued exhaustively? Only the Habit ORM relationship was audited for cascade issues — are there others in models.py that could silently destroy data? The caps on Weight and BodyMeasurements were inherited, not designed — what assumption were they making, and when does that assumption break? There's no regression harness: the next fix has no way to prove it didn't break something else. DST transitions and year-boundary queries (e.g., a streak spanning Dec 31 → Jan 1) haven't been stress-tested. The hub is likely safe today but the real question is: what's the weakest link in the chain of "safe over time"? Answer: the absence of any automated validation means the next change is flying blind.</div>
+    </details>
+    <details>
+      <summary><span class="advisor-dot" style="background:#10b981"></span> The Expansionist</summary>
+      <div class="advisor-body">Safe is the floor, not the ceiling. The hub works and the immediate bugs are fixed — but this is also the moment to ask what "complete" could mean. Cross-module data integrity under partial data scenarios hasn't been tested: what happens to the HealthDashboard when Exercise has 0 entries? What does the AI chatbot say when Sleep data is missing for 3 weeks? The cap strategy (limit=90, limit=365) has no archive path — data older than the cap silently disappears from analysis, which is fine until it isn't. The biggest strategic gap: Finance is localhost-only. Every behavioral correlation the AI chatbot could draw — spend vs. sleep, spend vs. exercise consistency — is unavailable. The hub is complete for its current scope, but the current scope may be the wrong scope. The audit was a maintenance event, not a completion event.</div>
+    </details>
+    <details>
+      <summary><span class="advisor-dot" style="background:#f59e0b"></span> The Outsider</summary>
+      <div class="advisor-body">Looking at this fresh: the hub has data caps (90 entries, 365 entries) that are completely invisible to the user. If I've been tracking weight for 4 months and the chart only shows the last 90 entries, I don't know data is missing — I just think my tracking history started 3 months ago. That's not a bug, it's a trust problem. Finance shows up as a module but doesn't work in production — if I don't know about the localhost dependency, I'd think the feature is broken with no explanation. The audit fixed things that were technically wrong, but it didn't verify things from a user-flow perspective: can a user actually log a full day across all modules and see consistent, coherent data everywhere? That end-to-end path was never validated. The fixes are real but the confidence they produce may be false confidence.</div>
+    </details>
+    <details>
+      <summary><span class="advisor-dot" style="background:#3b82f6"></span> The Executor</summary>
+      <div class="advisor-body">Usable today. Ship it. But two missed categories will bite you on the first bad day. First: write-path validation. Flask is accepting whatever is POSTed — no type checking, no range validation, no required-field enforcement. A fat-finger in the Sleep entry form (say, entering 25 hours of sleep) goes straight to the database with no guard. Second: there's no backup story. SQLite is a single file. If the Fly.io volume gets corrupted or the instance gets destroyed, all data is gone. Neither is a showstopper today. But the Weight and BodyMeasurements caps (limit=90) will silently drop data for anyone who's been tracking for more than 3 months. That's not future-Zach's problem — that's 90 days away. The fix is either raising the cap or adding a note in the UI that signals data older than 90 entries isn't shown.</div>
+    </details>
+  </div>
+
+  <!-- PEER REVIEWS -->
+  <div class="section-label">Peer Review Highlights (click to expand)</div>
+  <div class="reviews">
+    <details>
+      <summary>Peer Review Summary — All 5 reviewers</summary>
+      <div class="review-body">
+        <div class="review-q">Strongest response (all 5 agreed): The Executor</div>
+        <p>Most actionable — concrete time-bounded risks, real example (25-hour sleep entry), specific 90-day deadline, proposed fix. Earns its confidence claim rather than asserting it.</p>
+        <div class="review-q">Biggest blind spot (all 5 agreed): The Contrarian</div>
+        <p>Concurrent-tab state divergence is an enterprise concern applied to a single-user personal tracker. Inflated into a top-three risk at the expense of the Finance silent-failure point, which the Contrarian mentioned but buried third.</p>
+        <div class="review-q">What all five responses missed (unanimous): Authentication surface area</div>
+        <p>The PIN locks the frontend. Are the Flask API routes protected server-side? Is brute-force possible? What is session lifetime? Is HTTPS enforced? This is the highest-severity remaining gap — it makes every other fix irrelevant if the API is open to anyone with the URL.</p>
+      </div>
+    </details>
+  </div>
+
+  <footer>
+    LLM Council · Hub Safety Audit · 2026-05-19<br>
+    5 advisors (Contrarian, First Principles, Expansionist, Outsider, Executor) · 5 peer reviewers · Chairman synthesis
+  </footer>
+</div>
+</body>
+</html>

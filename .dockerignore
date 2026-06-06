@@ -1,0 +1,12 @@
+backend/.env
+backend/__pycache__/
+backend/*.pyc
+backend/*.db
+backend/venv/
+frontend/node_modules/
+frontend/dist/
+.git
+.gitignore
+*.bat
+*.vbs
+*.md
