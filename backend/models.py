@@ -881,6 +881,34 @@ class RoutineStepLog(db.Model):
         }
 
 
+class ReminderConfig(db.Model):
+    """Single-row SMS reminder configuration.
+
+    settings_json:  {category: {"enabled": bool, "hour": int, "minute": int}}
+    last_sent_json: {category: "YYYY-MM-DD"}  — dedupe so each fires once/day.
+    """
+    __tablename__ = "reminder_config"
+
+    id             = db.Column(db.Integer, primary_key=True)
+    phone          = db.Column(db.String(20),  nullable=True)
+    carrier        = db.Column(db.String(20),  nullable=True)   # email-to-SMS gateway key
+    enabled        = db.Column(db.Boolean,     nullable=False, default=True)
+    settings_json  = db.Column(db.Text,        nullable=False, default="{}")
+    last_sent_json = db.Column(db.Text,        nullable=False, default="{}")
+    updated_at     = db.Column(db.DateTime,    default=datetime.utcnow,
+                               onupdate=datetime.utcnow, nullable=False)
+
+    def to_dict(self):
+        import json as _json
+        return {
+            "phone":     self.phone,
+            "carrier":   self.carrier,
+            "enabled":   self.enabled,
+            "settings":  _json.loads(self.settings_json or "{}"),
+            "last_sent": _json.loads(self.last_sent_json or "{}"),
+        }
+
+
 class SkinWorkoutLog(db.Model):
     """Workout events logged via the skincare chat — isolated from the main Exercise module."""
     __tablename__ = "skin_workout_logs"

@@ -11,3 +11,15 @@
 - New API endpoints → new route in `backend/app.py` using Flask `@app.route`.
 - Database access → SQLAlchemy models in `backend/models.py`.
 - No new runtimes, no new servers, no polyglot backend services.
+
+## Deployment (non-negotiable)
+
+- **Every deploy ships to BOTH Fly.io apps**, never just one: `life-tracker-zach`
+  (`fly.toml`) **and** `life-tracker-nev` (`fly.nev.toml`). Shipping one leaves
+  the sites out of sync.
+- **The standard way to deploy is the `deploy-both-fly-apps` skill.** Follow it
+  for every deploy — it deploys `zach`, then `nev` only if `zach` succeeds, then
+  verifies both URLs respond.
+- **The norm:** once a self-contained set of local changes is complete and
+  verified, deploy to both sites via that skill. Deploy finished work, not
+  partial/in-progress edits.

@@ -2,6 +2,9 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import ErrorBoundary from "./ErrorBoundary.jsx";
 import FoodPhotoAnalyzer from "./FoodPhotoAnalyzer.jsx";
 import TemplatesPanel from "./TemplatesPanel.jsx";
+import {
+  PROTEIN_MEAL_WEIGHTS, MAIN_MEALS, pacificParts, mealProteinStatus, cutoffLabel,
+} from "./proteinTiming.mjs";
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -13,12 +16,12 @@ function toDateISO(d) {
 function localDateISO() { return toDateISO(new Date()); }
 
 const DAY_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-const WEEK_DAY_LABELS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
 const MEAL_TYPES  = ["breakfast","lunch","dinner","snack"];
 const MEAL_ICONS  = { breakfast:"🌅", lunch:"☀️", dinner:"🌙", snack:"🍎" };
 const MEAL_LABELS = { breakfast:"Breakfast", lunch:"Lunch", dinner:"Dinner", snack:"Snacks" };
 const MEAL_WEIGHTS = { breakfast:25, lunch:35, dinner:35, snack:5 };
+// PROTEIN_MEAL_WEIGHTS + Pacific-time meal-skip logic live in ./proteinTiming.mjs
 
 function defaultMealType() {
   const h = new Date().getHours();
@@ -67,10 +70,131 @@ function DateNav({ date, today, onChange }) {
 }
 
 // ---------------------------------------------------------------------------
+// ProteinTracker — target = body weight in lbs (1g protein per lb).
+// Flags meals lacking protein (skipped/under-target) and grams left in the day.
+// ---------------------------------------------------------------------------
+
+function ProteinTracker({ byMeal, totalProtein, target, weightSource, onSetWeight, date }) {
+  const [editWeight, setEditWeight] = useState("");
+
+  // Realtime Pacific clock — re-evaluate "skipped vs upcoming" as time passes.
+  const [pacific, setPacific] = useState(() => pacificParts());
+  useEffect(() => {
+    const id = setInterval(() => setPacific(pacificParts()), 30000); // every 30s
+    return () => clearInterval(id);
+  }, []);
+
+  // No body weight yet → let the user set it so we can derive the target.
+  if (!target) {
+    return (
+      <div className="nf-protein">
+        <div className="nf-protein-head">
+          <span className="nf-protein-title">💪 Protein</span>
+        </div>
+        <div className="nf-protein-setup">
+          <span>Target <strong>1g protein per lb</strong> — enter your body weight:</span>
+          <div className="nf-protein-setup-row">
+            <input
+              className="form-input" type="number" min="50" max="600" step="1"
+              placeholder="Weight (lb)" value={editWeight}
+              onChange={e => setEditWeight(e.target.value)}
+            />
+            <button
+              className="btn btn-primary btn-sm" disabled={!editWeight}
+              onClick={() => { const w = parseFloat(editWeight); if (w > 0) onSetWeight(w); }}
+            >Set</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const consumed   = Math.round(totalProtein || 0);
+  const remaining  = Math.max(0, target - consumed);
+  const pct        = target > 0 ? consumed / target : 0;
+  const statusCls  = pct >= 1 ? "good" : pct >= 0.6 ? "mid" : "low";
+
+  const mealProtein = t => Math.round((byMeal[t] || []).reduce((s, e) => s + (e.protein_g || 0), 0));
+
+  // Per-meal status is Pacific-time-aware: a main meal with nothing logged is
+  // only "skipped" once its PST cutoff has passed (e.g. breakfast after noon).
+  const statusOf = t => mealProteinStatus({
+    mealKey: t, grams: mealProtein(t), dayTarget: target, selectedDate: date, pacific,
+  });
+
+  const skippedNames  = MAIN_MEALS.filter(t => statusOf(t).status === "skipped");
+  const upcomingNames = MAIN_MEALS.filter(t => statusOf(t).status === "upcoming");
+  const perNext       = upcomingNames.length ? Math.ceil(remaining / upcomingNames.length) : null;
+  const joinMeals     = arr => arr.map(s => MEAL_LABELS[s]).join(" & ");
+
+  let note;
+  if (consumed >= target) {
+    note = `✅ Protein goal hit — ${consumed}g of ${target}g.`;
+  } else if (skippedNames.length) {
+    note = `Skipped ${joinMeals(skippedNames)}. ${remaining}g left today`
+         + (perNext ? ` — aim ~${perNext}g at ${joinMeals(upcomingNames)}.` : ".");
+  } else if (upcomingNames.length) {
+    note = `${remaining}g protein left — aim ~${perNext}g across ${joinMeals(upcomingNames)}.`;
+  } else {
+    note = `${remaining}g protein left today.`;
+  }
+
+  return (
+    <div className="nf-protein">
+      <div className="nf-protein-head">
+        <span className="nf-protein-title">💪 Protein</span>
+        <span className="nf-protein-target">
+          <span className={`nf-protein-consumed ${statusCls}`}>{consumed}</span>
+          <span className="nf-protein-sep">/</span>{target}g
+        </span>
+        <span className="nf-protein-target-note">
+          {target}g = body weight{weightSource === "manual" ? " (set)" : ""}
+        </span>
+      </div>
+
+      <div className="nf-protein-bar-track">
+        <div className={`nf-protein-bar-fill ${statusCls}`} style={{ width: `${Math.min(pct * 100, 100).toFixed(1)}%` }} />
+      </div>
+
+      <div className={`nf-protein-remaining ${statusCls}`}>
+        {remaining > 0
+          ? <><strong>{remaining}g</strong> needed left today</>
+          : <><strong>Goal met</strong> — {consumed}g 💪</>}
+      </div>
+
+      {/* Per-meal protein with Pacific-time-aware gap flags */}
+      <div className="nf-protein-meals">
+        {MEAL_TYPES.map(t => {
+          const g = mealProtein(t);
+          const { status, tgt } = statusOf(t);
+          const cls = status === "good" ? "good"
+                    : status === "low"  ? "low"
+                    : status === "skipped" ? "skip"
+                    : status === "upcoming" ? "upcoming" : "snack";
+          return (
+            <div key={t} className={`nf-protein-meal ${cls}`}>
+              <span className="nf-protein-meal-icon">{MEAL_ICONS[t]}</span>
+              <span className="nf-protein-meal-name">{MEAL_LABELS[t]}</span>
+              <span className="nf-protein-meal-g">{g}{tgt > 0 ? `/${tgt}` : ""}g</span>
+              {status === "skipped"  && <span className="nf-protein-flag skip">{g > 0 ? "low" : "skipped"} +{tgt - g}g</span>}
+              {status === "low"      && <span className="nf-protein-flag low">need +{tgt - g}g</span>}
+              {status === "upcoming" && <span className="nf-protein-flag upcoming">by {cutoffLabel(t)}</span>}
+              {status === "good"     && <span className="nf-protein-flag good">✓</span>}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className={`nf-protein-note ${statusCls}`}>{note}</div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // CalorieDaySection
 // ---------------------------------------------------------------------------
 
-function CalorieDaySection({ date, goal, onGoalChange, isFuture, onMutated, prefillEntry, onPrefillConsumed }) {
+function CalorieDaySection({ date, goal, onGoalChange, isFuture, onMutated, prefillEntry, onPrefillConsumed, proteinTarget, weightSource, onSetWeight }) {
   const [entries,          setEntries]          = useState([]);
   const [loading,          setLoading]          = useState(false);
   const [activeForm,       setActiveForm]       = useState(null);
@@ -288,6 +412,17 @@ function CalorieDaySection({ date, goal, onGoalChange, isFuture, onMutated, pref
           {total.fat_g     > 0 && <span style={{ color:"var(--text-dim)" }}>F {Math.round(total.fat_g)}g</span>}
         </div>
       </div>
+
+      {!isFuture && (
+        <ProteinTracker
+          byMeal={byMeal}
+          totalProtein={total.protein_g}
+          target={proteinTarget}
+          weightSource={weightSource}
+          onSetWeight={onSetWeight}
+          date={date}
+        />
+      )}
 
       {loading
         ? <div className="brief-loading"><span className="spinner" /> Loading…</div>
@@ -1038,167 +1173,221 @@ function NutritionChatbot({ goal, consumed, burned, date, onDraftEntry }) {
 }
 
 // ---------------------------------------------------------------------------
-// WeeklyStrip — energy balance: consumed − burned = net vs goal
+// EnergyBalanceExplorer — all-time energy balance, filterable by week/month/year
+//
+// Energy balance = calories consumed − calories expended, where daily
+// expenditure = maintenance baseline (TDEE or calorie goal) + exercise burned.
+// Only days with food logged ("tracked days") count, so un-logged days never
+// inflate the surplus/deficit. Surplus (+) ⇒ predicted gain; deficit (−) ⇒ loss.
+// All math is computed authoritatively by GET /api/energy-balance.
 // ---------------------------------------------------------------------------
 
-const TRACK_H = 76; // px — represents one day's calorie goal
+const GRANULARITIES = [
+  { key: "week",  label: "Weeks"  },
+  { key: "month", label: "Months" },
+  { key: "year",  label: "Years"  },
+];
+const BAR_MAX_H = 56; // px — tallest half of a balance bar
 
-const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
-function weekLabel(monday, weekOffset) {
-  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
-  if (weekOffset === 0) return "This Week";
-  const fmt = d => `${MONTH_SHORT[d.getMonth()]} ${d.getDate()}`;
-  const yearSuffix = sunday.getFullYear() !== new Date().getFullYear()
-    ? ` ${sunday.getFullYear()}` : "";
-  return `${fmt(monday)} – ${fmt(sunday)}${yearSuffix}`;
+function signedCal(n) {
+  return `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n).toLocaleString()}`;
+}
+function signedLbs(lbs) {
+  return `${lbs > 0 ? "+" : lbs < 0 ? "−" : ""}${Math.abs(lbs).toFixed(2)} lb`;
 }
 
-function WeeklyStrip({ calSummary, goal, burnedByDay }) {
-  const [weekOffset, setWeekOffset] = useState(0);
+function EnergyBalanceExplorer({ goal, today, refreshKey }) {
+  const [granularity, setGranularity] = useState("month");
+  const [baseline,    setBaseline]    = useState(null);   // null=auto | "goal" | "tdee"
+  const [data,        setData]        = useState(null);
+  const [loading,     setLoading]     = useState(true);
+  const [selectedKey, setSelectedKey] = useState(null);
+  const scrollRef = useRef(null);
 
-  const now      = new Date();
-  const todayStr = toDateISO(now);
+  useEffect(() => {
+    setLoading(true);
+    const params = new URLSearchParams({ granularity, date: today });
+    if (baseline) params.set("baseline", baseline);
+    fetch(`/api/energy-balance?${params.toString()}`)
+      .then(r => r.json())
+      .then(d => {
+        setData(d);
+        setLoading(false);
+        const last = d.buckets?.[d.buckets.length - 1]?.key ?? null;
+        setSelectedKey(prev =>
+          d.buckets?.some(b => b.key === prev) ? prev : last
+        );
+      })
+      .catch(() => setLoading(false));
+  }, [granularity, baseline, today, refreshKey]);
 
-  // Monday of the current week
-  const dow         = now.getDay();
-  const baseOffset  = dow === 0 ? -6 : 1 - dow;
-  const curMonday   = new Date(now);
-  curMonday.setDate(now.getDate() + baseOffset);
-  curMonday.setHours(0,0,0,0);
+  // Keep the most-recent bucket scrolled into view when data changes.
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
+  }, [data, granularity]);
 
-  // Monday of the viewed week (shifted by weekOffset weeks)
-  const monday = new Date(curMonday);
-  monday.setDate(curMonday.getDate() + weekOffset * 7);
+  const buckets = data?.buckets || [];
+  const overall = data?.overall;
+  const selected = buckets.find(b => b.key === selectedKey) || overall;
+  const maxAbs   = Math.max(1, ...buckets.map(b => Math.abs(b.balance)));
 
-  const weekDays = Array.from({ length:7 }, (_, i) => {
-    const d = new Date(monday); d.setDate(monday.getDate() + i); return toDateISO(d);
-  });
+  const usingTdee   = data?.baseline_source === "tdee";
+  const baselineCal = data?.baseline_per_day ?? goal;
+  const hasTdee     = !!data?.tdee;
 
-  const trackedDays   = weekDays.filter(d => d <= todayStr);
-  const totalConsumed = trackedDays.reduce((s, d) => s + (calSummary[d]?.calories || 0), 0);
-  const totalBurned   = trackedDays.reduce((s, d) => s + (burnedByDay?.[d] || 0), 0);
-  const netIntake     = totalConsumed - totalBurned;
-  const goalSoFar     = goal * trackedDays.length;
-  const weekBalance   = netIntake - goalSoFar;
-  const isSurplus     = weekBalance > 0;
-  const isCurrentWeek = weekOffset === 0;
+  const overSurplus = overall && overall.balance > 0;
 
   return (
-    <div className="nf-week-strip card">
-      <div className="nf-eb-header">
-        <div style={{ flex:1 }}>
-          <span className="nf-eb-title">⚡ Weekly Energy Balance</span>
-          <span className="nf-eb-sub"> · {trackedDays.length}/7 days · {goal.toLocaleString()} cal/day goal</span>
-        </div>
-        <div className="nf-week-nav">
-          <button className="ex-date-nav-btn" onClick={() => setWeekOffset(o => o - 1)}>‹</button>
-          <span className={`nf-week-nav-label${isCurrentWeek ? " is-current" : ""}`}>
-            {weekLabel(monday, weekOffset)}
+    <div className="nf-eb-card card">
+      {/* Header + granularity toggle */}
+      <div className="nf-eb-top">
+        <div className="nf-eb-headline">
+          <span className="nf-eb-title">⚡ Energy Balance</span>
+          <span className="nf-eb-sub">
+            {" "}· all-time intake vs. expenditure
           </span>
-          {!isCurrentWeek && (
-            <button className="ex-date-nav-today" onClick={() => setWeekOffset(0)}>↩ Now</button>
-          )}
-          <button className="ex-date-nav-btn" onClick={() => setWeekOffset(o => o + 1)} disabled={isCurrentWeek}>›</button>
+        </div>
+        <div className="nf-eb-gran">
+          {GRANULARITIES.map(g => (
+            <button
+              key={g.key}
+              className={`nf-eb-gran-btn${granularity === g.key ? " active" : ""}`}
+              onClick={() => setGranularity(g.key)}
+            >
+              {g.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Day bars */}
-      <div className="nf-eb-bars">
-        {weekDays.map((dk, i) => {
-          const consumed = calSummary[dk]?.calories || 0;
-          const burned   = burnedByDay?.[dk] || 0;
-          const net      = Math.max(consumed - burned, 0);
-          const isPast   = dk <= todayStr;
-          const isToday  = dk === todayStr;
-          const isFuture = dk > todayStr;
-          const hasData  = isPast && consumed > 0;
-
-          const overGoal = net > goal * 1.05;
-          const nearGoal = net >= goal * 0.85 && !overGoal;
-          const netColor = overGoal ? "var(--danger)" : nearGoal ? "var(--success)" : "var(--accent)";
-
-          // Scale: goal = TRACK_H px. Cap total bar at TRACK_H.
-          const scale    = goal > 0 ? TRACK_H / goal : 0;
-          const totalBarH = hasData ? Math.min(consumed * scale, TRACK_H) : 0;
-          // Burned shown as fraction of the bar (capped at 45% so net always visible)
-          const burnedBarH = hasData && burned > 0
-            ? Math.min(burned * scale, totalBarH * 0.45)
-            : 0;
-          const netBarH   = totalBarH - burnedBarH;
-
-          return (
-            <div key={dk} className={`nf-eb-day${isToday ? " today" : ""}${isFuture ? " future" : ""}`}>
-              {/* Bar: flex column-reverse → first child at bottom, second on top */}
-              <div className="nf-eb-bar-track" style={{ height: TRACK_H }}>
-                {hasData && (
-                  <>
-                    <div className="nf-eb-bar-net"    style={{ height: netBarH,    background: netColor }} />
-                    {burnedBarH > 0 && (
-                      <div className="nf-eb-bar-burned" style={{ height: burnedBarH }} />
-                    )}
-                  </>
-                )}
-              </div>
-
-              <div className={`nf-eb-day-label${isToday ? " is-today" : ""}`}>{WEEK_DAY_LABELS[i]}</div>
-
-              <div className="nf-eb-day-nums">
-                {isFuture || !hasData
-                  ? <span className="nf-eb-dim">—</span>
-                  : <>
-                      <span className="nf-eb-net-num" style={{ color: netColor }}>
-                        {net > 999 ? `${(net/1000).toFixed(1)}k` : net}
-                      </span>
-                      {burned > 0 && (
-                        <span className="nf-eb-burned-num">
-                          −{burned > 999 ? `${(burned/1000).toFixed(1)}k` : burned}🔥
-                        </span>
-                      )}
-                    </>}
-              </div>
+      {/* All-time overall summary */}
+      {overall && overall.tracked_days > 0 ? (
+        <div className="nf-eb-overall">
+          <div className={`nf-eb-overall-balance${overSurplus ? " surplus" : " deficit"}`}>
+            <span className="nf-eb-overall-num">{signedCal(overall.balance)}</span>
+            <span className="nf-eb-overall-cap">
+              cal {overSurplus ? "surplus" : "deficit"} · all time
+            </span>
+            <span className="nf-eb-overall-lbs">
+              ≈ {signedLbs(overall.weight_change_lbs)} body weight
+            </span>
+          </div>
+          <div className="nf-eb-overall-stats">
+            <div className="nf-eb-stat">
+              <span className="nf-eb-stat-num">{overall.consumed.toLocaleString()}</span>
+              <span className="nf-eb-stat-lbl">eaten</span>
             </div>
-          );
-        })}
+            <span className="nf-eb-stat-op">−</span>
+            <div className="nf-eb-stat">
+              <span className="nf-eb-stat-num">{overall.expenditure.toLocaleString()}</span>
+              <span className="nf-eb-stat-lbl">expended</span>
+            </div>
+            <div className="nf-eb-stat nf-eb-stat-muted">
+              <span className="nf-eb-stat-num">{overall.tracked_days}</span>
+              <span className="nf-eb-stat-lbl">days logged</span>
+            </div>
+            <div className="nf-eb-stat nf-eb-stat-muted">
+              <span className="nf-eb-stat-num">{signedCal(overall.avg_daily_balance)}</span>
+              <span className="nf-eb-stat-lbl">avg/day</span>
+            </div>
+          </div>
+        </div>
+      ) : !loading ? (
+        <div className="nf-eb-empty">
+          Log some food to see your energy balance. Days you don't log don't count.
+        </div>
+      ) : null}
+
+      {/* Baseline note + toggle */}
+      <div className="nf-eb-baseline">
+        <span className="nf-eb-baseline-note">
+          Maintenance baseline: <strong>{baselineCal.toLocaleString()} cal/day</strong>{" "}
+          {usingTdee ? "(TDEE from profile)" : "(calorie goal)"} + exercise burned
+        </span>
+        {hasTdee && (
+          <div className="nf-eb-baseline-toggle">
+            <button
+              className={`nf-eb-bt-btn${usingTdee ? " active" : ""}`}
+              onClick={() => setBaseline("tdee")}
+            >TDEE</button>
+            <button
+              className={`nf-eb-bt-btn${!usingTdee ? " active" : ""}`}
+              onClick={() => setBaseline("goal")}
+            >Goal</button>
+          </div>
+        )}
       </div>
+
+      {/* Bucket bar chart */}
+      {loading ? (
+        <div className="brief-loading"><span className="spinner" /> Loading…</div>
+      ) : buckets.length > 0 ? (
+        <div className="nf-eb-chart" ref={scrollRef}>
+          {buckets.map(b => {
+            const surplus = b.balance > 0;
+            const h = Math.round(Math.abs(b.balance) / maxAbs * BAR_MAX_H);
+            const isSel = b.key === selectedKey;
+            return (
+              <button
+                key={b.key}
+                className={`nf-eb-col${isSel ? " selected" : ""}`}
+                onClick={() => setSelectedKey(b.key)}
+                title={`${b.label}: ${signedCal(b.balance)} cal`}
+              >
+                <div className="nf-eb-col-top">
+                  {surplus && <div className="nf-eb-bar surplus" style={{ height: h }} />}
+                </div>
+                <div className="nf-eb-zero" />
+                <div className="nf-eb-col-bot">
+                  {!surplus && b.balance !== 0 && (
+                    <div className="nf-eb-bar deficit" style={{ height: h }} />
+                  )}
+                </div>
+                <span className="nf-eb-col-lbl">{b.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {/* Selected-period equation breakdown */}
+      {selected && selected.tracked_days > 0 && (
+        <div className="nf-eb-detail">
+          <div className="nf-eb-detail-title">
+            {selected.label}
+            <span className="nf-eb-detail-days"> · {selected.tracked_days} day{selected.tracked_days !== 1 ? "s" : ""} logged</span>
+          </div>
+          <div className="nf-eb-equation">
+            <div className="nf-eb-eq-col">
+              <span className="nf-eb-eq-num">{selected.consumed.toLocaleString()}</span>
+              <span className="nf-eb-eq-label">eaten</span>
+            </div>
+            <span className="nf-eb-eq-op">−</span>
+            <div className="nf-eb-eq-col">
+              <span className="nf-eb-eq-num">{selected.baseline_total.toLocaleString()}</span>
+              <span className="nf-eb-eq-label">maintenance</span>
+            </div>
+            <span className="nf-eb-eq-op">−</span>
+            <div className="nf-eb-eq-col">
+              <span className="nf-eb-eq-num" style={{ color:"#c084fc" }}>{selected.burned.toLocaleString()}</span>
+              <span className="nf-eb-eq-label">burned 🔥</span>
+            </div>
+            <span className="nf-eb-eq-op">=</span>
+            <div className={`nf-eb-balance${selected.balance > 0 ? " surplus" : " deficit"}`}>
+              <span className="nf-eb-balance-num">{signedCal(selected.balance)}</span>
+              <span className="nf-eb-balance-label">
+                {selected.balance > 0 ? "surplus" : "deficit"} · {signedLbs(selected.weight_change_lbs)}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Legend */}
       <div className="nf-eb-legend">
-        <span><span className="nf-eb-swatch" style={{ background:"var(--accent)" }} />Net intake</span>
-        <span><span className="nf-eb-swatch" style={{ background:"rgba(192,132,252,0.75)" }} />Exercise burned</span>
-        <span className="nf-eb-legend-note">Top of bar = daily goal</span>
-      </div>
-
-      {/* Equation row */}
-      <div className="nf-eb-equation">
-        <div className="nf-eb-eq-col">
-          <span className="nf-eb-eq-num">{totalConsumed.toLocaleString()}</span>
-          <span className="nf-eb-eq-label">consumed</span>
-        </div>
-
-        <span className="nf-eb-eq-op">−</span>
-
-        <div className="nf-eb-eq-col">
-          <span className="nf-eb-eq-num" style={{ color:"#c084fc" }}>{totalBurned.toLocaleString()}</span>
-          <span className="nf-eb-eq-label">burned</span>
-        </div>
-
-        <span className="nf-eb-eq-op">=</span>
-
-        <div className="nf-eb-eq-col">
-          <span className="nf-eb-eq-num">{netIntake.toLocaleString()}</span>
-          <span className="nf-eb-eq-label">net intake</span>
-        </div>
-
-        <div className="nf-eb-eq-vs">
-          vs <strong>{goalSoFar.toLocaleString()}</strong>
-          <span style={{ color:"var(--text-dim)" }}> goal</span>
-        </div>
-
-        <div className={`nf-eb-balance${isSurplus ? " surplus" : " deficit"}`}>
-          <span className="nf-eb-balance-num">{isSurplus ? "+" : "−"}{Math.abs(weekBalance).toLocaleString()}</span>
-          <span className="nf-eb-balance-label">{isSurplus ? "surplus" : "deficit"}</span>
-        </div>
+        <span><span className="nf-eb-swatch" style={{ background:"var(--danger)" }} />Surplus (over)</span>
+        <span><span className="nf-eb-swatch" style={{ background:"var(--success)" }} />Deficit (under)</span>
+        <span className="nf-eb-legend-note">3,500 cal ≈ 1 lb</span>
       </div>
     </div>
   );
@@ -1270,22 +1459,51 @@ export default function NutritionFitnessModule({ onBack, onOpenCalories, onOpenE
   const [burnedByDay,  setBurnedByDay]  = useState({});
   const [calRefresh,   setCalRefresh]   = useState(0);
   const [pendingDraft, setPendingDraft] = useState(null);
+  const [bodyWeight,   setBodyWeight]   = useState(() => {
+    const s = parseFloat(localStorage.getItem("protein_weight_lbs"));
+    return s > 0 ? s : null;
+  });
+  const [weightSource, setWeightSource] = useState(() =>
+    localStorage.getItem("protein_weight_lbs") ? "manual" : null);
 
   const isFuture = date > today;
 
-  // Sync goal from backend profile on mount (overrides localStorage if profile has a value)
+  // On mount: sync calorie goal + derive the protein target from body weight.
+  // Body-weight priority: latest logged weight → profile weight → manual (localStorage).
   useEffect(() => {
-    fetch("/api/profile")
-      .then(r => r.json())
-      .then(d => {
-        const serverGoal = d?.profile?.calorie_goal;
-        if (serverGoal && serverGoal >= 500) {
+    let cancelled = false;
+    (async () => {
+      let profile = null;
+      try {
+        const d = await (await fetch("/api/profile")).json();
+        profile = d?.profile || null;
+        const serverGoal = profile?.calorie_goal;
+        if (!cancelled && serverGoal && serverGoal >= 500) {
           setGoal(serverGoal);
           localStorage.setItem("cal_goal", String(serverGoal));
         }
-      })
-      .catch(() => {});
+      } catch { /* ignore */ }
+
+      let w = null, src = null;
+      try {
+        const wj = await (await fetch("/api/weight?limit=1")).json();
+        if (Array.isArray(wj) && wj.length && wj[wj.length - 1]?.weight_lbs) {
+          w = wj[wj.length - 1].weight_lbs; src = "log";
+        }
+      } catch { /* ignore */ }
+      if (w == null && profile?.weight_lbs) { w = profile.weight_lbs; src = "profile"; }
+      if (!cancelled && w != null) { setBodyWeight(w); setWeightSource(src); }
+    })();
+    return () => { cancelled = true; };
   }, []);
+
+  function handleSetWeight(w) {
+    setBodyWeight(w);
+    setWeightSource("manual");
+    localStorage.setItem("protein_weight_lbs", String(w));
+  }
+
+  const proteinTarget = bodyWeight != null ? Math.round(bodyWeight) : null;
 
   const fetchCalSummary = useCallback(() => {
     fetch("/api/food/daily-summary")
@@ -1367,6 +1585,9 @@ export default function NutritionFitnessModule({ onBack, onOpenCalories, onOpenE
               onMutated={() => { setCalRefresh(k => k + 1); }}
               prefillEntry={pendingDraft}
               onPrefillConsumed={() => setPendingDraft(null)}
+              proteinTarget={proteinTarget}
+              weightSource={weightSource}
+              onSetWeight={handleSetWeight}
             />
             <ExerciseDaySection
               date={date}
@@ -1383,10 +1604,10 @@ export default function NutritionFitnessModule({ onBack, onOpenCalories, onOpenE
             onDraftEntry={setPendingDraft}
           />
 
-          <WeeklyStrip
-            calSummary={calSummary}
+          <EnergyBalanceExplorer
             goal={goal}
-            burnedByDay={burnedByDay}
+            today={today}
+            refreshKey={calRefresh}
           />
         </ErrorBoundary>
       </main>

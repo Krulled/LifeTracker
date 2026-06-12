@@ -1,7 +1,15 @@
+import base64
 import hashlib
 import json
 import os
+import re
+import smtplib
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import date, datetime, timedelta
+from email.mime.text import MIMEText
+from zoneinfo import ZoneInfo
 from flask import Flask, jsonify, request, Response, send_from_directory, session
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -9,7 +17,7 @@ from dotenv import load_dotenv
 # Load .env before anything else (sets GROQ_API_KEY etc.)
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
-from models import db, SleepEntry, AICache, FoodEntry, Task, Habit, HabitLog, MoodEntry, ExerciseEntry, HydrationLog, MealTemplate, MealTemplateItem, ExerciseTemplate, ExerciseTemplateItem, WeightEntry, WeeklyReview, Chore, ChoreLog, BodyMeasurement, WeeklyPlan, Supplement, SupplementLog, ScreenTimeEntry, UserProfile, SkincareLog, SkinCareStep, SkinCareStepLog, SkinConditionLog, SkinPhotoAnalysis, ScannedProduct, SkinProduct, DailyRoutine, RoutineStepLog, SkinWorkoutLog
+from models import db, SleepEntry, AICache, FoodEntry, Task, Habit, HabitLog, MoodEntry, ExerciseEntry, HydrationLog, MealTemplate, MealTemplateItem, ExerciseTemplate, ExerciseTemplateItem, WeightEntry, WeeklyReview, Chore, ChoreLog, BodyMeasurement, WeeklyPlan, Supplement, SupplementLog, ScreenTimeEntry, UserProfile, SkincareLog, SkinCareStep, SkinCareStepLog, SkinConditionLog, SkinPhotoAnalysis, ScannedProduct, SkinProduct, DailyRoutine, RoutineStepLog, SkinWorkoutLog, ReminderConfig
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": ["http://localhost:9999", "http://127.0.0.1:9999", "http://localhost:3030", "http://127.0.0.1:3030"]}},
@@ -48,7 +56,8 @@ def require_pin():
     p = request.path
     if (not p.startswith("/api/")
             or p.startswith("/api/auth/")
-            or p.startswith("/api/sync/")):
+            or p.startswith("/api/sync/")
+            or p == "/api/reminders/run"):   # token-gated cron endpoint
         return
     if not session.get("pin_ok"):
         return jsonify({"error": "PIN required", "code": "PIN_REQUIRED"}), 401
@@ -1288,6 +1297,143 @@ def food_daily_summary():
         by_date[k]["fat_g"]     += e.fat_g      or 0
         by_date[k]["items"]     += 1
     return jsonify(by_date)
+
+
+_MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+_CAL_PER_LB   = 3500.0   # ~kcal energy in one pound of body weight
+
+
+def _resolve_baseline(p, override):
+    """Pick the per-day maintenance baseline used for energy balance.
+
+    Returns (baseline_per_day, source, goal, tdee). Prefers TDEE (true
+    maintenance from the profile) and falls back to the calorie goal — or the
+    2000 default — when TDEE inputs are missing. `override` ("goal"|"tdee")
+    lets the client force a baseline when the data is available.
+    """
+    goal = int(p.calorie_goal) if (p and p.calorie_goal) else 2000
+    tdee = None
+    if p:
+        _, tdee, _ = _compute_tdee(p)
+    if override == "goal":
+        return goal, "goal", goal, tdee
+    if override == "tdee" and tdee:
+        return tdee, "tdee", goal, tdee
+    if tdee:
+        return tdee, "tdee", goal, tdee
+    return goal, "goal", goal, tdee
+
+
+def _bucket_for(d, granularity):
+    """Return (key, label, start_date, end_date) for the period containing d."""
+    if granularity == "week":
+        start = d - timedelta(days=d.weekday())        # Monday
+        end   = start + timedelta(days=6)              # Sunday
+        if start.month == end.month:
+            label = f"{_MONTHS_SHORT[start.month-1]} {start.day}–{end.day}"
+        else:
+            label = f"{_MONTHS_SHORT[start.month-1]} {start.day} – {_MONTHS_SHORT[end.month-1]} {end.day}"
+        if end.year != date.today().year:
+            label += f", {end.year}"
+        return start.isoformat(), label, start, end
+    if granularity == "year":
+        return str(d.year), str(d.year), date(d.year, 1, 1), date(d.year, 12, 31)
+    # month (default)
+    start = date(d.year, d.month, 1)
+    if d.month == 12:
+        end = date(d.year, 12, 31)
+    else:
+        end = date(d.year, d.month + 1, 1) - timedelta(days=1)
+    return f"{d.year}-{d.month:02d}", f"{_MONTHS_SHORT[d.month-1]} {d.year}", start, end
+
+
+@app.route("/api/energy-balance", methods=["GET"])
+def energy_balance():
+    """All-time energy balance, bucketed by week / month / year.
+
+    Energy balance = calories consumed − calories expended, where daily
+    expenditure = maintenance baseline (TDEE or goal) + exercise burned.
+    Only days that actually have food logged ("tracked days") contribute, so
+    un-logged days never inflate the surplus/deficit. A positive balance is a
+    surplus (predicted weight gain); negative is a deficit (predicted loss).
+    """
+    from collections import defaultdict
+
+    granularity = request.args.get("granularity", "month")
+    if granularity not in ("week", "month", "year"):
+        granularity = "month"
+
+    # Client local "today" (Fly runs UTC) — never count future-dated rows.
+    try:
+        today = date.fromisoformat(request.args["date"]) if request.args.get("date") else date.today()
+    except ValueError:
+        today = date.today()
+
+    p = UserProfile.query.first()
+    baseline, baseline_source, goal, tdee = _resolve_baseline(p, request.args.get("baseline"))
+
+    # Per-day calories consumed — a day is "tracked" only if it has food rows.
+    consumed_by_day = defaultdict(int)
+    for f in FoodEntry.query.all():
+        if f.entry_date and f.entry_date <= today:
+            consumed_by_day[f.entry_date] += f.calories or 0
+
+    # Per-day calories burned via logged exercise.
+    burned_by_day = defaultdict(int)
+    for e in ExerciseEntry.query.all():
+        if e.entry_date and e.entry_date <= today:
+            burned_by_day[e.entry_date] += e.calories_burned or 0
+
+    def _blank(key, label, start, end):
+        return {
+            "key": key, "label": label,
+            "start": start.isoformat(), "end": end.isoformat(),
+            "tracked_days": 0, "consumed": 0, "burned": 0,
+        }
+
+    buckets = {}
+    overall = {"tracked_days": 0, "consumed": 0, "burned": 0}
+
+    for d in sorted(consumed_by_day.keys()):
+        consumed = consumed_by_day[d]
+        burned   = burned_by_day.get(d, 0)
+        key, label, start, end = _bucket_for(d, granularity)
+        b = buckets.get(key) or _blank(key, label, start, end)
+        b["tracked_days"] += 1
+        b["consumed"]     += consumed
+        b["burned"]       += burned
+        buckets[key] = b
+        overall["tracked_days"] += 1
+        overall["consumed"]     += consumed
+        overall["burned"]       += burned
+
+    def _finalize(b):
+        baseline_total = baseline * b["tracked_days"]
+        expenditure    = baseline_total + b["burned"]
+        bal            = b["consumed"] - expenditure
+        b["baseline_total"]    = baseline_total
+        b["expenditure"]       = expenditure
+        b["balance"]           = bal
+        b["avg_daily_balance"] = round(bal / b["tracked_days"]) if b["tracked_days"] else 0
+        b["weight_change_lbs"] = round(bal / _CAL_PER_LB, 2)
+        return b
+
+    bucket_list = [_finalize(b) for b in sorted(buckets.values(), key=lambda x: x["start"])]
+    overall.update({"key": "all", "label": "All time",
+                    "start": bucket_list[0]["start"] if bucket_list else None,
+                    "end":   bucket_list[-1]["end"]  if bucket_list else None})
+    _finalize(overall)
+
+    return jsonify({
+        "granularity":     granularity,
+        "baseline_source": baseline_source,   # "tdee" | "goal"
+        "baseline_per_day": baseline,
+        "goal":            goal,
+        "tdee":            tdee,
+        "today":           today.isoformat(),
+        "buckets":         bucket_list,
+        "overall":         overall,
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -5435,6 +5581,335 @@ def sync_push_db():
 
 
 # ---------------------------------------------------------------------------
+# Reminders / SMS Routes
+# ---------------------------------------------------------------------------
+
+_PACIFIC = ZoneInfo("America/Los_Angeles")
+
+REMINDER_CATEGORIES = ["goals", "nutrition", "skincare", "tasks"]
+_REMINDER_DEFAULTS = {
+    "goals":     {"enabled": True, "hour": 8,  "minute": 0, "label": "Goals",     "icon": "🎯"},
+    "nutrition": {"enabled": True, "hour": 19, "minute": 0, "label": "Nutrition", "icon": "🍗"},
+    "skincare":  {"enabled": True, "hour": 21, "minute": 0, "label": "Skincare",  "icon": "✨"},
+    "tasks":     {"enabled": True, "hour": 9,  "minute": 0, "label": "Tasks",     "icon": "✅"},
+}
+
+
+# US carrier email-to-SMS gateways (free — send a plain-text email, it arrives as a text).
+_CARRIER_GATEWAYS = {
+    "tmobile":    {"domain": "tmomail.net",              "label": "T-Mobile"},
+    "att":        {"domain": "txt.att.net",              "label": "AT&T"},
+    "verizon":    {"domain": "vtext.com",                "label": "Verizon"},
+    "googlefi":   {"domain": "msg.fi.google.com",        "label": "Google Fi"},
+    "metro":      {"domain": "mymetropcs.com",           "label": "Metro"},
+    "cricket":    {"domain": "sms.cricketwireless.net",  "label": "Cricket"},
+    "boost":      {"domain": "sms.myboostmobile.com",    "label": "Boost"},
+    "uscellular": {"domain": "email.uscc.net",           "label": "US Cellular"},
+}
+
+
+def _gmail_configured():
+    return bool(os.environ.get("GMAIL_ADDRESS") and os.environ.get("GMAIL_APP_PASSWORD"))
+
+
+def _sms_configured():
+    """True if any delivery channel is usable (free Gmail email-to-SMS or Twilio)."""
+    return _gmail_configured() or all(
+        os.environ.get(k) for k in ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM"))
+
+
+def _gateway_address(phone, carrier):
+    """Build a carrier email-to-SMS address, e.g. 5108767182@tmomail.net."""
+    g = _CARRIER_GATEWAYS.get(carrier or "")
+    if not g:
+        return None
+    digits = re.sub(r"\D", "", phone or "")[-10:]
+    if len(digits) != 10:
+        return None
+    return f"{digits}@{g['domain']}"
+
+
+def _send_email_sms(to_addr, body):
+    """Send a text via the carrier's email-to-SMS gateway using Gmail SMTP.
+
+    The message is PLAIN TEXT only (no HTML part) so the SMS arrives clean —
+    Gmail's web/app composer adds an HTML layer that shows up as <div> tags in
+    the text; a pure text/plain SMTP send avoids that entirely.
+    """
+    user = os.environ.get("GMAIL_ADDRESS")
+    pw   = os.environ.get("GMAIL_APP_PASSWORD", "").replace(" ", "")  # app pwds shown with spaces
+    if not (user and pw):
+        return False, "Gmail not configured (GMAIL_ADDRESS / GMAIL_APP_PASSWORD)."
+    msg = MIMEText(body, "plain", "utf-8")
+    msg["From"] = user
+    msg["To"]   = to_addr
+    # No Subject on purpose — keeps the resulting SMS to just the body.
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=20) as s:
+            s.ehlo(); s.starttls(); s.ehlo()
+            s.login(user, pw)
+            s.sendmail(user, [to_addr], msg.as_string())
+        return True, "sent via gmail"
+    except Exception as e:  # noqa: BLE001
+        return False, f"Gmail SMS failed: {e}"
+
+
+def _deliver_sms(phone, carrier, body):
+    """Deliver a reminder. Prefer free Gmail email-to-SMS; fall back to Twilio."""
+    if _gmail_configured() and carrier in _CARRIER_GATEWAYS:
+        addr = _gateway_address(phone, carrier)
+        if not addr:
+            return False, "Invalid phone for email-to-SMS gateway."
+        return _send_email_sms(addr, body)
+    return _send_sms(phone, body)
+
+
+def _send_sms(to, body):
+    """Send one SMS via the Twilio REST API using only the stdlib.
+
+    Returns (ok: bool, detail: str) where detail is the message SID on success
+    or an error string on failure.
+    """
+    sid   = os.environ.get("TWILIO_ACCOUNT_SID")
+    token = os.environ.get("TWILIO_AUTH_TOKEN")
+    frm   = os.environ.get("TWILIO_FROM")
+    if not (sid and token and frm):
+        return False, "SMS not configured — set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM."
+    if not to:
+        return False, "No destination phone number set."
+
+    url  = f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json"
+    data = urllib.parse.urlencode({"To": to, "From": frm, "Body": body}).encode()
+    req  = urllib.request.Request(url, data=data, method="POST")
+    auth = base64.b64encode(f"{sid}:{token}".encode()).decode()
+    req.add_header("Authorization", f"Basic {auth}")
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            payload = json.loads(resp.read().decode())
+            return True, payload.get("sid", "sent")
+    except urllib.error.HTTPError as e:
+        try:
+            err = json.loads(e.read().decode())
+            return False, f"Twilio {e.code}: {err.get('message', '')} (code {err.get('code')})"
+        except Exception:
+            return False, f"Twilio HTTP {e.code}"
+    except Exception as e:  # noqa: BLE001
+        return False, f"SMS send failed: {e}"
+
+
+def _protein_target():
+    """Daily protein target in grams = latest body weight (1g/lb)."""
+    we = WeightEntry.query.order_by(WeightEntry.entry_date.desc()).first()
+    if we and we.weight_lbs:
+        return round(we.weight_lbs)
+    p = UserProfile.query.first()
+    if p and p.weight_lbs:
+        return round(p.weight_lbs)
+    return None
+
+
+def _msg_nutrition(d):
+    foods      = FoodEntry.query.filter_by(entry_date=d).all()
+    consumed_p = round(sum(f.protein_g or 0 for f in foods))
+    consumed_c = sum(f.calories or 0 for f in foods)
+    p          = UserProfile.query.first()
+    goal_c     = p.calorie_goal if (p and p.calorie_goal) else 2000
+    parts      = []
+    tgt        = _protein_target()
+    if tgt:
+        left = max(0, tgt - consumed_p)
+        parts.append(f"protein {consumed_p}/{tgt}g ✅" if left == 0 else f"protein {consumed_p}/{tgt}g ({left}g to go)")
+    cal_left = goal_c - consumed_c
+    parts.append(f"{cal_left} cal left" if cal_left >= 0 else f"{abs(cal_left)} cal over")
+    return "🍗 Nutrition: " + ", ".join(parts) + "."
+
+
+def _msg_skincare(d):
+    log = SkincareLog.query.filter_by(log_date=d).first()
+    am  = bool(log and log.am_done)
+    pm  = bool(log and log.pm_done)
+    if am and pm:
+        return "✨ Skincare: AM + PM both done — nice work!"
+    pending = [name for name, done in (("AM", am), ("PM", pm)) if not done]
+    return f"✨ Skincare: {' & '.join(pending)} routine still to do today."
+
+
+def _msg_tasks(d):
+    active    = Task.query.filter(Task.status != "done").all()
+    if not active:
+        return "✅ Tasks: all clear — nothing pending."
+    overdue   = sum(1 for t in active if t.due_date and t.due_date < d)
+    due_today = sum(1 for t in active if t.due_date == d)
+    bits = []
+    if overdue:   bits.append(f"{overdue} overdue")
+    if due_today: bits.append(f"{due_today} due today")
+    if not bits:  bits.append(f"{len(active)} open")
+    return "✅ Tasks: " + ", ".join(bits) + "."
+
+
+def _msg_goals(d):
+    habits = Habit.query.filter_by(is_active=True).all()
+    total  = len(habits)
+    if total:
+        done = sum(1 for h in habits
+                   if HabitLog.query.filter_by(habit_id=h.id, log_date=d).first())
+        tail = "Keep the streak alive! 🔥" if done < total else "All habits done! 🔥"
+        return f"🎯 Goals: habits {done}/{total} today. {tail}"
+    return "🎯 Goals: log today's progress to stay on track."
+
+
+_MSG_BUILDERS = {
+    "goals": _msg_goals, "nutrition": _msg_nutrition,
+    "skincare": _msg_skincare, "tasks": _msg_tasks,
+}
+
+
+def _reminder_settings(cfg):
+    stored = json.loads(cfg.settings_json or "{}") if cfg else {}
+    out = {}
+    for cat, dflt in _REMINDER_DEFAULTS.items():
+        s = stored.get(cat, {})
+        out[cat] = {
+            "enabled": bool(s.get("enabled", dflt["enabled"])),
+            "hour":    int(s.get("hour",   dflt["hour"])),
+            "minute":  int(s.get("minute", dflt["minute"])),
+        }
+    return out
+
+
+def _get_or_create_cfg():
+    cfg = ReminderConfig.query.first()
+    if not cfg:
+        cfg = ReminderConfig(phone=None, enabled=True, settings_json="{}", last_sent_json="{}")
+        db.session.add(cfg)
+        db.session.commit()
+    return cfg
+
+
+@app.route("/api/reminders", methods=["GET"])
+def get_reminders():
+    cfg = _get_or_create_cfg()
+    return jsonify({
+        "phone":          cfg.phone or "",
+        "carrier":        cfg.carrier or "",
+        "enabled":        cfg.enabled,
+        "settings":       _reminder_settings(cfg),
+        "last_sent":      json.loads(cfg.last_sent_json or "{}"),
+        "categories":     [{"key": k, **{x: v[x] for x in ("label", "icon")}} for k, v in _REMINDER_DEFAULTS.items()],
+        "carriers":       [{"key": k, "label": v["label"]} for k, v in _CARRIER_GATEWAYS.items()],
+        "delivery":       "gmail" if _gmail_configured() else ("twilio" if _sms_configured() else "none"),
+        "sms_configured": _sms_configured(),
+        "now_pst":        datetime.now(_PACIFIC).strftime("%Y-%m-%d %H:%M %Z"),
+    })
+
+
+@app.route("/api/reminders", methods=["POST"])
+def save_reminders():
+    data = request.get_json(force=True) or {}
+    cfg  = _get_or_create_cfg()
+
+    if "phone" in data:
+        phone = str(data.get("phone") or "").strip()
+        cfg.phone = phone[:20] or None
+    if "carrier" in data:
+        c = str(data.get("carrier") or "").strip().lower()
+        cfg.carrier = c if c in _CARRIER_GATEWAYS else None
+    if "enabled" in data:
+        cfg.enabled = bool(data["enabled"])
+
+    if isinstance(data.get("settings"), dict):
+        merged = _reminder_settings(cfg)
+        for cat, s in data["settings"].items():
+            if cat not in _REMINDER_DEFAULTS or not isinstance(s, dict):
+                continue
+            cur = merged[cat]
+            if "enabled" in s: cur["enabled"] = bool(s["enabled"])
+            if "hour" in s:
+                try: cur["hour"] = max(0, min(23, int(s["hour"])))
+                except (TypeError, ValueError): pass
+            if "minute" in s:
+                try: cur["minute"] = max(0, min(59, int(s["minute"])))
+                except (TypeError, ValueError): pass
+        cfg.settings_json = json.dumps(merged)
+
+    db.session.commit()
+    return jsonify({"ok": True, **get_reminders().get_json()})
+
+
+@app.route("/api/reminders/test", methods=["POST"])
+def test_reminder():
+    data = request.get_json(force=True) or {}
+    cfg  = _get_or_create_cfg()
+
+    # Persist phone/carrier if supplied so the test doubles as a save.
+    phone = str(data.get("phone") or cfg.phone or "").strip()
+    if data.get("phone"):
+        cfg.phone = phone[:20] or None
+    if data.get("carrier"):
+        c = str(data["carrier"]).strip().lower()
+        cfg.carrier = c if c in _CARRIER_GATEWAYS else cfg.carrier
+    db.session.commit()
+    carrier = cfg.carrier
+
+    if not phone:
+        return jsonify({"error": "Add a phone number first."}), 400
+    if not _sms_configured():
+        return jsonify({"error": "No delivery channel configured. Set GMAIL_ADDRESS + GMAIL_APP_PASSWORD (free email-to-SMS) or TWILIO_* creds."}), 503
+
+    d   = datetime.now(_PACIFIC).date()
+    cat = data.get("category")
+    if cat in _MSG_BUILDERS:
+        body = "Test reminder - " + _MSG_BUILDERS[cat](d)
+    else:
+        lines = [_MSG_BUILDERS[c](d) for c in REMINDER_CATEGORIES]
+        body  = "Life Tracker test reminder:\n" + "\n".join(lines)
+
+    ok, detail = _deliver_sms(phone, carrier, body)
+    if not ok:
+        return jsonify({"error": detail}), 502
+    return jsonify({"ok": True, "sid": detail, "preview": body, "to": phone,
+                    "via": "gmail" if (_gmail_configured() and carrier in _CARRIER_GATEWAYS) else "twilio"})
+
+
+@app.route("/api/reminders/run", methods=["GET", "POST"])
+def run_reminders():
+    """Cron target — sends any reminders now due (Pacific time). Token-gated."""
+    token = os.environ.get("REMINDER_CRON_TOKEN")
+    if not token or request.args.get("token") != token:
+        return jsonify({"error": "forbidden"}), 403
+
+    cfg = _get_or_create_cfg()
+    if not cfg.enabled or not cfg.phone:
+        return jsonify({"sent": 0, "reason": "disabled or no phone"})
+    if not _sms_configured():
+        return jsonify({"sent": 0, "reason": "SMS not configured"}), 200
+
+    now_pst  = datetime.now(_PACIFIC)
+    today_iso = now_pst.date().isoformat()
+    settings  = _reminder_settings(cfg)
+    last_sent = json.loads(cfg.last_sent_json or "{}")
+
+    sent, results = 0, []
+    for cat in REMINDER_CATEGORIES:
+        s = settings[cat]
+        if not s["enabled"] or last_sent.get(cat) == today_iso:
+            continue
+        due_at = now_pst.replace(hour=s["hour"], minute=s["minute"], second=0, microsecond=0)
+        if now_pst < due_at:
+            continue
+        ok, detail = _deliver_sms(cfg.phone, cfg.carrier, _MSG_BUILDERS[cat](now_pst.date()))
+        results.append({"category": cat, "ok": ok, "detail": detail})
+        if ok:
+            last_sent[cat] = today_iso
+            sent += 1
+
+    cfg.last_sent_json = json.dumps(last_sent)
+    db.session.commit()
+    return jsonify({"sent": sent, "results": results, "now_pst": now_pst.strftime("%Y-%m-%d %H:%M %Z")})
+
+
+# ---------------------------------------------------------------------------
 # SPA — serve built React frontend (production; no-op in local dev)
 # ---------------------------------------------------------------------------
 
@@ -5483,6 +5958,7 @@ with app.app_context():
         ("mood_entries",           "tags",       "TEXT"),
         ("user_profile",           "goal_weight_lbs", "REAL"),
         ("user_profile",           "weekly_pace_lbs", "REAL"),
+        ("reminder_config",        "carrier",         "VARCHAR(20)"),
     ]:
         try:
             with db.engine.connect() as conn:

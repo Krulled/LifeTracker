@@ -1,0 +1,26 @@
+name: SMS Reminders
+
+# Free scheduling for the SMS reminder feature. GitHub Actions cron runs in UTC
+# roughly every 15 min; each run POSTs to /api/reminders/run, which itself checks
+# (in Pacific time) which reminders are due and sends at most one per category/day.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}   # allow manual "Run workflow"
+
+jobs:
+  fire:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger reminder run on both apps
+        env:
+          TOKEN: ${{ secrets.REMINDER_CRON_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "REMINDER_CRON_TOKEN secret is not set — skipping."; exit 0
+          fi
+          for app in life-tracker-zach life-tracker-nev; do
+            echo "== $app =="
+            curl -fsS -X POST "https://$app.fly.dev/api/reminders/run?token=$TOKEN" || echo "request failed for $app"
+            echo
+          done

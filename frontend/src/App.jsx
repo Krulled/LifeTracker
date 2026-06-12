@@ -20,8 +20,9 @@ import CorrelationInsights       from "./components/CorrelationInsights.jsx";
 import ScreenTimeModule          from "./components/ScreenTimeModule.jsx";
 import ProfileModule             from "./components/ProfileModule.jsx";
 import SkinCareModule            from "./components/SkinCareModule.jsx";
+import RemindersModule           from "./components/RemindersModule.jsx";
 
-const VALID_MODULES = ["sleep","calories","tasks","habits","mood","exercise","hydration","weight","weekly-review","chores","nutrition","body-measurements","screen-time","profile","skin-care"];
+const VALID_MODULES = ["sleep","calories","tasks","habits","mood","exercise","hydration","weight","weekly-review","chores","nutrition","body-measurements","screen-time","profile","skin-care","reminders"];
 
 export default function App() {
   const [authReady, setAuthReady] = useState(false);
@@ -101,6 +102,7 @@ function AuthedApp({ onLock }) {
           {module === "screen-time"       && <ScreenTimeModule         onBack={goHome} />}
           {module === "profile"           && <ProfileModule            onBack={goHome} />}
           {module === "skin-care"         && <SkinCareModule           onBack={goHome} />}
+          {module === "reminders"         && <RemindersModule          onBack={goHome} />}
         </ErrorBoundary>
       </div>
     </div>
@@ -218,6 +220,7 @@ function LifeHub({ onSelect, onLock }) {
             <ModuleTile id="screen-time"   icon="📱" label="Screen Time"   onSelect={onSelect} />
             <ModuleTile id="skin-care"     icon="✨" label="Skin Care"     onSelect={onSelect} />
             <ModuleTile id="weekly-review" icon="📋" label="Weekly Review" onSelect={onSelect} />
+            <ModuleTile id="reminders"     icon="🔔" label="Reminders"     onSelect={onSelect} />
             <ModuleTile id="profile"       icon="⚙️" label="Profile"       onSelect={onSelect} />
           </div>
         </div>
