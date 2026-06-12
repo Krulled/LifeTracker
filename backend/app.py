@@ -5898,6 +5898,9 @@ def run_reminders():
         due_at = now_pst.replace(hour=s["hour"], minute=s["minute"], second=0, microsecond=0)
         if now_pst < due_at:
             continue
+        if sent > 0:
+            import time as _time
+            _time.sleep(8)   # space sends so carrier gateways don't throttle a burst
         ok, detail = _deliver_sms(cfg.phone, cfg.carrier, _MSG_BUILDERS[cat](now_pst.date()))
         results.append({"category": cat, "ok": ok, "detail": detail})
         if ok:
