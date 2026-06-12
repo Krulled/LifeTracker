@@ -5641,9 +5641,9 @@ def _send_email_sms(to_addr, body):
     if not (user and pw):
         return False, "Gmail not configured (GMAIL_ADDRESS / GMAIL_APP_PASSWORD)."
     msg = MIMEText(body, "plain", "utf-8")
-    msg["From"] = user
-    msg["To"]   = to_addr
-    # No Subject on purpose — keeps the resulting SMS to just the body.
+    msg["From"]    = user
+    msg["To"]      = to_addr
+    msg["Subject"] = " "   # single space — suppresses the carrier's "(no subject)" line
     try:
         with smtplib.SMTP("smtp.gmail.com", 587, timeout=20) as s:
             s.ehlo(); s.starttls(); s.ehlo()
